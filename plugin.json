@@ -1,0 +1,18 @@
+{
+  "display_name": "七海千秋 · 故事引擎",
+  "desc": "以「命运丝线（Fate Weaver）」为核心引擎的独立零耦合故事插件。在立体小镇与常驻舞台中记录角色真实见闻，交由人格模型在每个节点做出自己的选择，并据此滚动编排后续故事。",
+  "author": "Roche114514",
+  "repo": "https://github.com/Roche114514/nanami_story",
+  "social_link": "",
+  "entry": "plugins.nanami_story.plugin:NanamiStoryPlugin",
+  "logo": "logo.png",
+  "tags": [
+    "story",
+    "fate-weaver",
+    "roleplay",
+    "persona",
+    "world"
+  ],
+  "lowest_shinsekai_version": "2.6.0",
+  "version": "0.3.0"
+}
