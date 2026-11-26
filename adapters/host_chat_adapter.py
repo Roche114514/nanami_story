@@ -1,9 +1,10 @@
-"""宿主聊天输入适配器（预留形态 1/2/3 联动接口，保持完全解耦）。"""
+"""宿主聊天输入适配器。"""
 
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

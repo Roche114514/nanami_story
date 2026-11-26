@@ -83,6 +83,7 @@ def ask_llm_json(
     adapter_provider: Callable[[], Any] | None = None,
     timeout_sec: float = 20.0,
     max_tokens: int = 2400,
+    temperature: float = 0.45,
 ) -> dict[str, Any] | None:
     adapter = (adapter_provider or default_llm_adapter)()
     if adapter is None:
@@ -99,7 +100,7 @@ def ask_llm_json(
             try:
                 resp = adapter.chat(
                     messages=messages,
-                    temperature=0.45,
+                    temperature=temperature,
                     max_tokens=max_tokens,
                     stream=False,
                     response_format={"type": "json_object"},
@@ -107,7 +108,7 @@ def ask_llm_json(
             except TypeError:
                 resp = adapter.chat(
                     messages=messages,
-                    temperature=0.45,
+                    temperature=temperature,
                     max_tokens=max_tokens,
                     stream=False,
                 )

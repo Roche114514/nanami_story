@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from .adapters.background_adapter import (
+    BACKGROUND_SCENE_KEYS, background_scene_fields, match_catalog_scene, resolve_catalog_scene,
+)
 from .adapters.llm_adapter import ask_llm_json
+from .character_chronicle import active_dialogue_beat
 from .fate_schema import (
     MAX_ORGANIC_NODES,
     PHASE_LABELS,
@@ -22,6 +27,291 @@ from .fate_schema import (
     normalize_max_nodes,
     redact_fate_session_for_ui,
 )
+
+
+def _ask_dialogue_model(system: str, context: Any, llm_fn) -> Mapping[str, Any] | None:
+    try:
+        raw = (llm_fn or ask_llm_json)(system, json.dumps(context, ensure_ascii=False))
+    except Exception:
+        return None
+    return raw if isinstance(raw, Mapping) else None
+
+
+def _available_backgrounds(scenes: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [{"index": scene["index"], "label": scene["label"]} for scene in scenes]
+
+
+def preview_dialogue_opening(
+    *, title: str = "", theme_compass: str = "auto", outline: str = "",
+    characters: Sequence[str] = (), recent_chat_turns: Sequence[Any] = (),
+    custom_draft: Mapping[str, Any] | None = None, experience_mode: str = "co_play",
+    use_llm: bool = True, llm_fn=None,
+    background_catalog: Mapping[str, Any] | None = None,
+    opening_scene_index: int = 0, allow_scene_transitions: bool = True,
+) -> dict[str, Any]:
+    """Prepare editable scene framing with one private stake per character."""
+    title = clip_text(title, 56, "未命名对话剧本")
+    is_observer = str(experience_mode or "").strip().lower() == "observer"
+    recent = [
+        clip_text(row.get("text") or row.get("content") if isinstance(row, Mapping) else row, 240)
+        for row in list(recent_chat_turns)[-10:]
+        if not isinstance(row, Mapping) or row.get("role") in {"user", "assistant", "rendered"}
+    ]
+    theme = theme_compass if theme_compass in VALID_THEME_COMPASSES else "bond_turning"
+    anchor = next((row for row in reversed(recent) if row), "")
+    default_sit = "在场众人各自怀揣心事，气氛悄然绷紧，故事正要展开。" if is_observer else "你们有了片刻独处的时间，正等着看对方想说什么。"
+    situation = clip_text(outline, 240, default_sit)
+    if anchor:
+        situation = f"谈话刚触及「{clip_text(anchor, 75)}」。{situation}"
+    draft = {
+        "title": title, "theme_compass": theme,
+        "premise": clip_text(
+            outline, 240,
+            "一场汇聚在场角色的交谈悄然展开，各自的心事即将浮出水面。" if is_observer else "一场对话让彼此有机会说出一直搁在心里的事。",
+        ),
+        "public_incident_fact": "在场的人正在交谈，话题仍有继续的余地。",
+        "scene_name": "谈话现场", "atmosphere": "让情绪随着彼此的反应慢慢浮现",
+        "node1": {
+            "situation": situation,
+            "dilemma_frame": "在场角色是选择主动试探彼此，还是暂时保留自己的想法？" if is_observer else "是顺着话题问下去，还是先给彼此一点空间？",
+        },
+        "character_roles": {name: {"local_role": "谈话的参与者", "relationship_to_incident": ""}
+                            for name in characters},
+    }
+    scenes = (background_catalog or {}).get("scenes") or ()
+    pinned_scene = resolve_catalog_scene(scenes, scene_index=opening_scene_index)
+    model = None
+    if use_llm and custom_draft is None:
+        system_prompt = (
+            "为主对话准备开场。仅返回 JSON {premise, public_incident_fact, scene_name, atmosphere,"
+            "node1:{situation,dilemma_frame}, character_roles:{角色名:{local_role,relationship_to_incident}}}。"
+            "从用户剧本切入。已有聊天只是素材，禁止把未说的私事写进公开局势。"
+            "character_roles 的关系和秘密只供对应角色知道。写处境和两难，避免可照念的台词。"
+        )
+        if is_observer:
+            system_prompt += "当前为纯观剧模式，玩家不在场。开局梗概、公开事实、处境与两难只能围绕在场角色之间展开，禁止出现「你」或玩家参与。"
+        context = {"title": title, "theme_compass": theme, "outline": outline, "characters": list(characters),
+                   "experience_mode": "observer" if is_observer else "co_play", "recent_chat_turns": recent}
+        if scenes:
+            context["available_backgrounds"] = _available_backgrounds(scenes)
+            system_prompt += "严格从 available_backgrounds 选择开场背景，输出 background_scene_index 及其对应的准确 scene_name。"
+            if pinned_scene is not None:
+                context["pinned_scene"] = {"index": pinned_scene["index"], "label": pinned_scene["label"]}
+                system_prompt += "指定了 pinned_scene 时必须使用该场景。"
+            if not allow_scene_transitions:
+                system_prompt += "本篇章保持在开场场景。"
+        model = _ask_dialogue_model(system_prompt, context, llm_fn)
+    edits = custom_draft if isinstance(custom_draft, Mapping) else model or {}
+    for key, limit in (("premise", 240), ("public_incident_fact", 260), ("scene_name", 80), ("atmosphere", 160)):
+        if key in edits:
+            draft[key] = clip_text(edits[key], limit)
+    node_edits = edits.get("node1")
+    if isinstance(node_edits, Mapping):
+        for key, limit in (("situation", 320), ("dilemma_frame", 240)):
+            if key in node_edits:
+                draft["node1"][key] = clip_text(node_edits[key], limit)
+    roles = edits.get("character_roles")
+    if isinstance(roles, Mapping):
+        for name in characters:
+            role = roles.get(name)
+            if isinstance(role, Mapping):
+                for key, limit in (("local_role", 36), ("relationship_to_incident", 120)):
+                    if key in role:
+                        draft["character_roles"][name][key] = clip_text(role[key], limit)
+    if background_catalog and scenes:
+        chosen = (pinned_scene or resolve_catalog_scene(
+            scenes, scene_index=edits.get("background_scene_index", 0), scene_name=edits.get("scene_name", ""),
+        ) or match_catalog_scene(scenes, f"{outline}\n{title}"))
+        if chosen is not None:
+            draft.update(background_scene_fields(background_catalog["name"], chosen))
+    return draft
+
+
+def weave_dialogue_opening(
+    session: Mapping[str, Any], *, title: str = "", theme_compass: str = "auto",
+    outline: str = "", characters: Sequence[str] = (), max_nodes: int = 0,
+    recent_chat_turns: Sequence[Any] = (), custom_draft: Mapping[str, Any] | None = None,
+    experience_mode: str = "", use_llm: bool = True, llm_fn=None,
+    background_catalog: Mapping[str, Any] | None = None,
+    opening_scene_index: int = 0, allow_scene_transitions: bool = True,
+) -> dict[str, Any]:
+    cast = {
+        row["host_character"]: aid for aid, row in session.get("ledgers", {}).items()
+        if row.get("host_character")
+    }
+    characters = list(characters or cast)
+    exp_mode = experience_mode or str(session.get("experience_mode") or "co_play")
+    draft = preview_dialogue_opening(
+        title=title, theme_compass=theme_compass, outline=outline, characters=characters,
+        recent_chat_turns=recent_chat_turns, custom_draft=custom_draft,
+        experience_mode=exp_mode, use_llm=use_llm, llm_fn=llm_fn,
+        background_catalog=background_catalog, opening_scene_index=opening_scene_index,
+        allow_scene_transitions=allow_scene_transitions,
+    )
+    is_observer = str(exp_mode).strip().lower() == "observer"
+    default_sit = "在场众人各自怀揣心事，故事正悄然展开。" if is_observer else "你们有了片刻安静交谈的时间。"
+    default_dil = "是直接试探彼此的想法，还是先按捺不语？" if is_observer else "是继续聊下去，还是先听听对方想说什么？"
+    node = make_story_node(
+        title=draft["scene_name"] or "开场", scene_name=draft["scene_name"], atmosphere=draft["atmosphere"],
+        situation=draft["node1"]["situation"] or default_sit,
+        dilemma_frame=draft["node1"]["dilemma_frame"] or default_dil,
+    )
+    if "background_scene_index" in draft:
+        node.update({key: draft[key] for key in (*BACKGROUND_SCENE_KEYS, "scene_name")})
+    roles = {cast[name]: role for name, role in draft["character_roles"].items() if name in cast}
+    return make_fate_thread(
+        title=draft["title"], premise=draft["premise"], theme_compass=draft["theme_compass"],
+        public_incident_fact=draft["public_incident_fact"], resident_roles=roles,
+        lead_actor_ids=list(roles), core_actor_ids=list(roles), nodes=[node], max_nodes=max_nodes, min_nodes=1,
+    )
+
+
+_EXPLICIT_SCENE_SHIFT = re.compile(
+    r"(?:换个场景|跳到(?:第二天|次日|下一幕|晚上|明天)|转到下一幕|推进(?:到)?下一幕|"
+    r"结束(?:这段|这个)场景|我们(?:换个地方|去别处)|let.s (?:move on|change scenes)|skip to|end (?:the|this) scene)",
+    re.IGNORECASE,
+)
+
+
+def evaluate_and_weave_dialogue_beat(
+    session: Mapping[str, Any], *, force_evaluate: bool = False, strong_shift: bool = False,
+    use_llm: bool = True, llm_fn=None,
+    background_catalog: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    thread, node = active_dialogue_beat(session)
+    if not node:
+        return {"action": "continue_scene"}
+    # Shared scene framing can rely only on lines heard by the entire chapter cast.
+    cast = {aid for aid, row in session["ledgers"].items() if not row.get("is_player")}
+    all_lines = node.get("recent_dialogue_lines", [])
+    lines = {row["line_id"]: row for row in all_lines if cast.issubset(row["audience"])}
+    is_observer = session.get("experience_mode") == "observer"
+    player_id = str(session.get("player_actor_id") or "")
+    if not is_observer and player_id:
+        last_player = next((row for row in reversed(all_lines)
+                            if row["actor_id"] == player_id), {})
+        strong_shift = strong_shift or bool(
+            _EXPLICIT_SCENE_SHIFT.search(last_player.get("speech", ""))
+        )
+    turns = int(node.get("turns_in_node", 0))
+    if not (force_evaluate or strong_shift) and turns < int(node.get("min_turns_before_advance", 2)):
+        return {"action": "continue_scene"}
+
+    seq = int(node["seq"])
+    limit = thread.get("max_nodes") or MAX_ORGANIC_NODES
+    scene_context = session.get("scene_context") or {}
+    builtin_background = scene_context.get("background_mode") == "shinsekai"
+    scenes = ((background_catalog or {}).get("scenes") or ()) if builtin_background else ()
+    allow_shift = bool(scene_context.get("allow_scene_transitions", True))
+    raw = None
+    if use_llm and lines:
+        eval_prompt = (
+            "根据真实对话推演。只输出 JSON {action,line_ids,revealed_facts,player_stance,"
+            "next_node:{scene_name,atmosphere,situation,dilemma_frame}}。"
+            "action 用 continue_scene/next_node/resolve；后两种必须引用真实角色发言的 line_ids。"
+            "每条 revealed_facts 用 {line_ids,quote}，quote 必须是原话，事实依发言人的说法记录。"
+            "player_stance 可选 {line_ids,quote}，只能引用玩家原话。"
+            "编排大纲可提示未来方向，里面的秘密与计划不属于已知事实。"
+            "下一幕只写当下可面对的处境和选择，不能宣称发生了台词中没有说出的事。"
+        )
+        if is_observer:
+            eval_prompt += "当前为纯观剧模式，玩家不在场，不要输出 player_stance，仅根据在场角色之间的真实发言推进下一幕或收束篇章。"
+        context = {"title": thread["title"], "public_incident_fact": thread.get("public_incident_fact"),
+                   "theme_compass": thread["theme_compass"], "chapter_outline": session.get("dialogue_preset", {}).get("outline"),
+                   "experience_mode": "observer" if is_observer else "co_play",
+                   "situation": node["situation"], "dilemma_frame": node["dilemma_frame"],
+                   "chapter_limit": limit, "current_beat": seq, "strong_shift": strong_shift,
+                   "transcript": [{k: row[k] for k in ("line_id", "character_name", "speech")} for row in lines.values()]}
+        if scenes and allow_shift:
+            context.update(available_backgrounds=_available_backgrounds(scenes),
+                           current_scene_index=node.get("background_scene_index", 0))
+            eval_prompt += "如需转场，只能用 next_node.background_scene_index 指定 available_backgrounds 中的编号，场景名由该编号决定。"
+        elif builtin_background:
+            context["current_scene_name"] = node.get("scene_name", "")
+            eval_prompt += "下一幕沿用当前内置背景场景。"
+        raw = _ask_dialogue_model(eval_prompt, context, llm_fn)
+    if raw is None and not thread.get("max_nodes"):
+        limit = 3
+    default_action = "resolve" if seq >= limit else "next_node"
+
+    def verified_ids(value: Any) -> list[str]:
+        if not isinstance(value, list) or not value or any(not isinstance(ref, str) or ref not in lines for ref in value):
+            return []
+        return list(dict.fromkeys(value))
+
+    def grounded_quote(value: Any, *, player_only: bool = False) -> tuple[str, list[str]]:
+        if not isinstance(value, Mapping):
+            return "", []
+        refs = verified_ids(value.get("line_ids"))
+        quote = value.get("quote")
+        if isinstance(quote, str) and quote.strip():
+            for ref in refs:
+                line = lines[ref]
+                if (not player_only or (player_id and line["actor_id"] == player_id)) and quote in line["speech"]:
+                    return f"{line['character_name']}：「{line['speech']}」", [ref]
+        return "", []
+
+    refs = verified_ids(raw.get("line_ids")) if raw else []
+    action = raw.get("action") if raw else default_action
+    if not lines and not (force_evaluate or strong_shift):
+        # The pacing still applies when only part of the cast is present. Advance
+        # with neutral scene framing and omit claims about private exchanges.
+        action = default_action if all_lines else "continue_scene"
+    elif raw and (action not in ("continue_scene", "next_node", "resolve")
+                  or (action != "continue_scene" and not any(
+                      lines[ref]["actor_id"] != player_id for ref in refs))):
+        action = "continue_scene"
+    if force_evaluate and action == "continue_scene":
+        action, refs, raw = default_action, [], None
+    if action != "continue_scene" and seq >= limit:
+        action = "resolve"
+    if raw is None and action != "continue_scene":
+        refs = list(lines)[-2:]
+    evidence = [f"{lines[ref]['character_name']}：「{clip_text(lines[ref]['speech'], 160)}」" for ref in refs]
+    facts = raw.get("revealed_facts") if raw else None
+    fact_rows = [grounded_quote(row) for row in facts[:12]] if isinstance(facts, list) else []
+    stance, _ = ("", []) if is_observer else (grounded_quote(raw.get("player_stance"), player_only=True) if raw else ("", []))
+    result = {
+        "action": action, "line_ids": refs, "revealed_facts": [quote for quote, _ in fact_rows if quote],
+        "player_stance_note": stance, "outcome_summary": " / ".join(evidence),
+    }
+    if action == "next_node":
+        framing = raw.get("next_node") if raw else None
+        framing = framing if isinstance(framing, Mapping) else {}
+        scene_fields = {}
+        if builtin_background and (scenes or "background_scene_index" in node):
+            chosen = resolve_catalog_scene(scenes, scene_index=framing.get("background_scene_index", 0)) if allow_shift else None
+            if chosen is not None and background_catalog is not None:
+                scene_fields = background_scene_fields(background_catalog["name"], chosen)
+            else:
+                scene_fields = {key: node[key] for key in (*BACKGROUND_SCENE_KEYS, "scene_name") if key in node}
+        scene_name = scene_fields.get("scene_name", framing.get("scene_name") or node.get("scene_name", ""))
+        result["next_node"] = make_story_node(
+            seq=seq + 1, parent_node_id=node["node_id"],
+            phase="entangle" if seq == 1 else "crossroads" if seq < 3 else "ripple",
+            title=scene_name or "谈话继续",
+            scene_name=scene_name,
+            atmosphere=framing.get("atmosphere") or node.get("atmosphere", ""),
+            situation=framing.get("situation") or "对话留出了新的空隙。眼下可以沿着仍值得谈的地方继续，也可以把注意力放到彼此接下来想做的事上。",
+            dilemma_frame=framing.get("dilemma_frame") or "继续追问，还是提出一个双方都愿意尝试的下一步？",
+            min_turns_before_advance=node.get("min_turns_before_advance", 2),
+        )
+        result["next_node"].update(scene_fields)
+    elif action == "resolve":
+        # Retrospective prose is assembled from the transcript, never from the
+        # planner's guesses about an unspoken confession or promise.
+        char_eps = {}
+        for aid in sorted(cast):
+            last = next((row for prior in reversed(thread["nodes"])
+                         for row in reversed(prior["recent_dialogue_lines"]) if row["actor_id"] == aid), None)
+            if last:
+                char_eps[aid] = f"在这段谈话中说过：「{clip_text(last['speech'], 160)}」"
+        key_turns = [prior["outcome_summary"] for prior in thread["nodes"] if prior["outcome_summary"]] + evidence
+        result["chapter_chronicle"] = {
+            "title": thread["title"], "epilogue": " / ".join((evidence or key_turns)[-2:]) or "这段谈话在此告一段落。",
+            "key_turns": key_turns[-12:], "character_epilogues": char_eps,
+        }
+    return result
 
 
 def _spaces_index(world_state: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:

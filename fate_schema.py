@@ -11,7 +11,10 @@ from typing import Any
 FATE_SCHEMA_VERSION = 3
 MAX_ORGANIC_NODES = 20
 
-VALID_FATE_MODES: tuple[str, ...] = ("attached", "standalone")
+VALID_FATE_MODES: tuple[str, ...] = ("attached", "standalone", "dialogue")
+VALID_DIALOGUE_INTENTS = (
+    "probe", "confide", "conceal", "confront", "deflect", "propose_shift", "silent_observe",
+)
 VALID_EXPERIENCE_MODES: tuple[str, ...] = ("co_play", "observer")
 VALID_THEME_COMPASSES: tuple[str, ...] = (
     "daily_aspiration",
@@ -145,7 +148,7 @@ def _clamp_int(value: Any, lo: int, hi: int, default: int) -> int:
     return max(lo, min(hi, num))
 
 
-def normalize_max_nodes(value: Any, default: int = 0) -> int:
+def normalize_max_nodes(value: Any, default: int = 0, *, minimum: int = 3) -> int:
     """规范化丝线拍数上限：0/auto 表示不限固定拍数、随角色抉择持续演进（硬顶 MAX_ORGANIC_NODES）。"""
     if value is None:
         return default
@@ -159,7 +162,7 @@ def normalize_max_nodes(value: Any, default: int = 0) -> int:
         return default
     if num <= 0:
         return 0
-    return max(3, min(MAX_ORGANIC_NODES, num))
+    return max(minimum, min(MAX_ORGANIC_NODES, num))
 
 
 def _str_list(raw: Any, *, max_items: int = 12, max_len: int = 120) -> list[str]:
@@ -280,6 +283,14 @@ def normalize_choice_record(
     exec_status = str(src.get("execution_status") or "").strip().lower()
     if exec_status not in ("pending", "completed", "interrupted", "observed"):
         exec_status = "observed" if intent["kind"] == "observe" else "pending"
+    dialogue = src.get("dialogue_intent")
+    if isinstance(dialogue, Mapping):
+        kind = str(dialogue.get("kind") or "").strip().lower()
+        dialogue = {
+            "kind": kind if kind in VALID_DIALOGUE_INTENTS else "silent_observe",
+            "target": clip_text(dialogue.get("target"), 80, ""),
+            "hint": clip_text(dialogue.get("hint"), 120, ""),
+        }
     return {
         "choice_id": cid,
         "actor_id": str(actor_id),
@@ -293,6 +304,7 @@ def normalize_choice_record(
         "inner_reason": clip_text(src.get("inner_reason"), 240, ""),
         "inner_hidden": bool(src.get("inner_hidden", False)),
         "world_intent": intent,
+        **({"dialogue_intent": dialogue} if isinstance(dialogue, Mapping) else {}),
         "speech_seed": clip_text(src.get("speech_seed"), 100, ""),
         "arc_delta": normalize_arc_delta(src.get("arc_delta")),
         "execution_status": exec_status,
@@ -348,6 +360,13 @@ def make_story_node(
     dialogue_focus: Mapping[str, Any] | None = None,
     created_at_min: float = 0.0,
     pressure_deadline_min: float = 0.0,
+    turns_in_node: int = 0,
+    min_turns_before_advance: int = 2,
+    scene_name: str = "",
+    atmosphere: str = "",
+    revealed_facts: Sequence[str] | None = None,
+    hidden_hooks: Sequence[str] | None = None,
+    recent_dialogue_lines: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     clean_phase = str(phase or "spark").strip().lower()
     if clean_phase not in VALID_THREAD_PHASES:
@@ -377,6 +396,14 @@ def make_story_node(
         "created_at_min": round(float(created_at_min), 2),
         "resolved_at_min": None,
         "pressure_deadline_min": round(float(pressure_deadline_min), 2),
+        "turns_in_node": max(0, int(turns_in_node)),
+        "min_turns_before_advance": max(0, int(min_turns_before_advance)),
+        "scene_name": clip_text(scene_name, 80, ""),
+        "atmosphere": clip_text(atmosphere, 160, ""),
+        "revealed_facts": _str_list(revealed_facts, max_items=24, max_len=240),
+        "hidden_hooks": _str_list(hidden_hooks),
+        "recent_dialogue_lines": [copy.deepcopy(dict(row)) for row in
+                                  (recent_dialogue_lines or ()) if isinstance(row, Mapping)][-48:],
     }
 
 
@@ -392,6 +419,7 @@ def make_fate_thread(
     nodes: Sequence[Mapping[str, Any]] | None = None,
     active_node_id: str = "",
     max_nodes: int = 0,
+    min_nodes: int = 3,
     lead_actor_ids: Sequence[str] | None = None,
     core_actor_ids: Sequence[str] = (),
     created_at_min: float = 0.0,
@@ -433,7 +461,7 @@ def make_fate_thread(
         },
         "nodes": node_list,
         "active_node_id": eff_active,
-        "max_nodes": normalize_max_nodes(max_nodes, 0),
+        "max_nodes": normalize_max_nodes(max_nodes, 0, minimum=min_nodes),
         "lead_actor_ids": list(dict.fromkeys(str(aid).strip() for aid in (lead_actor_ids or ()) if str(aid).strip())),
         "core_actor_ids": list(dict.fromkeys(core_actor_ids)),
         "chapter_chronicle": None,
@@ -445,7 +473,7 @@ def make_fate_thread(
 def make_fate_session(
     *,
     mode: str = "attached",
-    realm_space_id: str,
+    realm_space_id: str = "",
     realm_name: str = "",
     title: str = "",
     experience_mode: str = "co_play",
@@ -456,6 +484,14 @@ def make_fate_session(
     event_cursor: int = 0,
     started_at_min: float = 0.0,
     ledgers: Mapping[str, Mapping[str, Any]] | None = None,
+    paused: bool = False,
+    linked_history_path: str = "",
+    linked_conversation_id: str = "",
+    turn_count: int = 0,
+    revision: int = 0,
+    director_whispers: Sequence[Mapping[str, Any]] | None = None,
+    turn_checkpoints: Sequence[Mapping[str, Any]] | None = None,
+    scene_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     now = round(time.time(), 3)
     clean_mode = str(mode or "attached").strip().lower()
@@ -487,6 +523,14 @@ def make_fate_session(
         },
         "threads": [],
         "chronicle_archive": [],
+        "paused": bool(paused),
+        "linked_history_path": str(linked_history_path or ""),
+        "linked_conversation_id": str(linked_conversation_id or ""),
+        "turn_count": max(0, int(turn_count)),
+        "revision": max(0, int(revision)),
+        "director_whispers": copy.deepcopy(list(director_whispers or ())),
+        "turn_checkpoints": copy.deepcopy(list(turn_checkpoints or ())[-24:]),
+        "scene_context": copy.deepcopy(dict(scene_context or {})),
         "created_at": now,
         "updated_at": now,
     }
@@ -494,7 +538,11 @@ def make_fate_session(
 
 def redact_fate_session_for_ui(session: Mapping[str, Any]) -> dict[str, Any]:
     """按 Decision 3.A 脱敏返回给前端：默认隐藏未收束丝线中的角色内心独白。"""
-    out = copy.deepcopy(dict(session))
+    out = copy.deepcopy({
+        key: value for key, value in session.items()
+        if key not in {"turn_checkpoints", "dialogue_checkpoint_base", "dialogue_history_cursor",
+                       "dialogue_turn_signatures"}
+    })
     reveal_all = bool(out.get("reveal_inner_thoughts", False))
     threads = out.get("threads") or []
     resolved_ids = {

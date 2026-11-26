@@ -1,4 +1,4 @@
-"""Load this checkout against an installed Shinsekai SDK and world plugin."""
+"""Load this checkout against an installed Shinsekai SDK."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ STORY_CODE = Path(__file__).resolve().parents[1]
 PROJECT = Path(os.environ.get("SHINSEKAI_TEST_ROOT") or STORY_CODE.parents[1]).expanduser().resolve()
 WORLD_CODE = PROJECT / "plugins" / "nanami_world"
 
-if not (PROJECT / "sdk" / "register.py").is_file() or not (WORLD_CODE / "plugin.py").is_file():
-    raise RuntimeError("Set SHINSEKAI_TEST_ROOT to a Shinsekai installation with the nanami_world plugin.")
+if not (PROJECT / "sdk" / "register.py").is_file():
+    raise RuntimeError("Set SHINSEKAI_TEST_ROOT to a Shinsekai installation.")
 
 sys.path.insert(0, str(PROJECT))
 import plugins

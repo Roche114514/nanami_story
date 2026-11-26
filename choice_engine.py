@@ -2,12 +2,103 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
 from .adapters.llm_adapter import ask_llm_json
-from .character_chronicle import summarize_ledger_for_prompt
+from .character_chronicle import active_director_whispers, summarize_ledger_for_prompt
 from .fate_schema import VALID_STANCES, clip_text, normalize_choice_record
+
+
+_DIALOGUE_APPROACHES = {
+    "investigate": ("probe", "留意对方绕开的细节，找机会轻声求证"),
+    "confront": ("confront", "抓住最难回避的一点，等合适的时机问清"),
+    "protect": ("deflect", "先缓和眼前的压力，给彼此留些余地"),
+    "confide": ("confide", "确认对方愿意听，再试着透露一点自己的感受"),
+    "conceal": ("conceal", "先把最难启齿的部分留在心里"),
+    "withdraw": ("silent_observe", "允许沉默，先观察对方接下来的反应"),
+    "pursue_dream": ("propose_shift", "寻找眼下双方都愿意试的一小步"),
+    "mediate": ("propose_shift", "顺着双方都认同的地方尝试缓和分歧"),
+}
+
+
+def decide_dialogue_actor_choice(
+    session: Mapping[str, Any], thread: Mapping[str, Any], node: Mapping[str, Any],
+    actor_id: str, persona_adapter: Any, *, use_llm: bool = True, llm_fn=None,
+    custom_persona_dir: str = "",
+) -> dict[str, Any]:
+    ledger = session["ledgers"][actor_id]
+    name = ledger.get("host_character") or ledger["name"]
+    options = {"custom_persona_dir": custom_persona_dir}
+    profile = persona_adapter.read_character_profile(name, **options) if persona_adapter else {}
+    relations = persona_adapter.read_character_relations(name, **options) if persona_adapter else {}
+    traits = profile.get("traits_summary") or ledger.get("traits_summary") or {}
+    stance, _ = _score_stances_offline(
+        traits, thread["theme_compass"], relations, ledger.get("choice_records", []),
+    )
+    kind, direction = _DIALOGUE_APPROACHES[stance]
+    role = (thread.get("resident_roles") or {}).get(actor_id, ledger.get("story_role", {}))
+    offline = {
+        "stance": stance, "choice_summary": direction,
+        "inner_reason": role.get("relationship_to_incident") or f"此刻更愿意{direction}。",
+        "dialogue_intent": {"kind": kind, "target": "", "hint": direction},
+        "speech_seed": direction,
+        "arc_delta": {"aspirations": [direction]},
+    }
+    result = offline
+    is_observer = session.get("experience_mode") == "observer"
+    if use_llm:
+        context = {
+            "character": name, "soul_text": profile.get("soul_text") or ledger.get("persona_brief"),
+            "traits_summary": traits, "style_tags": profile.get("style_tags") or ledger.get("style_tags"),
+            "relations": relations, "story_role": role,
+            "experience_mode": session.get("experience_mode", "co_play"),
+            "other_cast": [item for item in session.get("dialogue_cast", []) if item != name],
+            "personal_chronicle": summarize_ledger_for_prompt(ledger, max_events=5, max_choices=3)
+            if ledger.get("experienced_events") or ledger.get("choice_records") else "",
+            "situation": node["situation"], "dilemma_frame": node["dilemma_frame"],
+            "public_incident_fact": thread.get("public_incident_fact"),
+            "director_whispers": active_director_whispers(session, name),
+        }
+        system_prompt = (
+            "根据单个角色的视角写其尚未付诸行动的对话意图。只返回 JSON，包含 stance、"
+            "choice_summary、inner_reason、dialogue_intent {kind,target,hint}、speech_seed、arc_delta。"
+            "kind 用 probe/confide/conceal/confront/deflect/propose_shift/silent_observe。"
+            "speech_seed 和 hint 只能写语气、时机或交谈方向，禁止写可照念的对白。"
+            "arc_delta 只能记录内在意向，禁止捏造已说的承诺、事实或已发生的行为。"
+        )
+        if is_observer:
+            system_prompt += "当前为纯观剧模式，玩家不在场；交谈对象仅限其他在场角色（或独处自省），target 不要指向玩家。"
+        try:
+            raw = (llm_fn or ask_llm_json)(
+                system_prompt,
+                json.dumps(context, ensure_ascii=False),
+            )
+        except Exception:
+            raw = None
+        if isinstance(raw, Mapping) and isinstance(raw.get("dialogue_intent"), Mapping):
+            result = {**offline, **{key: raw[key] for key in offline if key in raw}}
+            intent = dict(result["dialogue_intent"])
+            # Keep a model-provided direction only when it is phrased as guidance.
+            for key, value in (("speech_seed", result["speech_seed"]), ("hint", intent.get("hint"))):
+                if not isinstance(value, str) or not re.match(
+                    r"^(?:先|试着|可以|留意|观察|倾向|等|用|以|视|保持|避免|轻声|轻轻|给|顺着|找|从|让|若)",
+                    value.strip(),
+                ) or re.search(r'["“”「」『』\n]', value):
+                    value = direction
+                if key == "hint":
+                    intent[key] = value
+                else:
+                    result[key] = value
+            result["dialogue_intent"] = intent
+            arc = result["arc_delta"]
+            result["arc_delta"] = {"aspirations": arc.get("aspirations", [])} if isinstance(arc, Mapping) else {}
+    return normalize_choice_record(
+        result, actor_id=actor_id, actor_name=name, thread_id=thread["thread_id"],
+        node_id=node["node_id"], node_title=node["title"],
+    )
 
 
 def _grounded_catalog(

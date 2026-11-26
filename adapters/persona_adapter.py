@@ -4,19 +4,92 @@ from __future__ import annotations
 
 import json
 import os
+from collections import deque
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 
-def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.is_file():
-        return None
+def _read_text(path: Path) -> str:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        return raw if isinstance(raw, dict) else None
-    except (OSError, ValueError):
+        return path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeError):
+        return ""
+
+
+def _read_json_value(path: Path) -> Any:
+    try:
+        return json.loads(_read_text(path))
+    except ValueError:
         return None
+
+
+def _read_json(path: Path) -> dict[str, Any] | None:
+    raw = _read_json_value(path)
+    return raw if isinstance(raw, dict) else None
+
+
+def _corpus_pairs(path: Path, limit: int) -> list[tuple[str, str]]:
+    buckets: dict[str, deque[tuple[str, str]]] = {}
+    if limit <= 0:
+        return []
+    for line in _read_text(path).splitlines():
+        fields = line.strip().split("\t", 2)
+        if line.lstrip().startswith("#") or len(fields) != 3:
+            continue
+        bucket, prompt, reply = (field.strip() for field in fields)
+        if prompt and reply:
+            buckets.setdefault(bucket, deque()).append((prompt[:160], reply[:160]))
+    preferred = ("casual", "curious", "repair_afterglow")
+    ordered = [buckets.pop(key) for key in preferred if key in buckets] + list(buckets.values())
+    pairs: list[tuple[str, str]] = []
+    while len(pairs) < limit and any(ordered):
+        for rows in ordered:
+            if rows and len(pairs) < limit:
+                pair = rows.popleft()
+                if pair not in pairs:
+                    pairs.append(pair)
+    return pairs
+
+
+def _off_voice_words(path: Path) -> list[str]:
+    raw = _read_json_value(path)
+    if isinstance(raw, Mapping):
+        groups = [raw.get(key) for key in ("ban", "words", "phrases", "items", "patterns")]
+    else:
+        groups = [raw]
+    return list(dict.fromkeys(word.strip() for group in groups if isinstance(group, list)
+                              for word in group if isinstance(word, str) and word.strip()))
+
+
+def _mind_hint(state_root: Path | None) -> str:
+    if state_root is None:
+        return ""
+    raw = _read_json(state_root / "state" / "mind.json") or {}
+
+    def updated(entry: tuple[int, Mapping[str, Any]]) -> tuple[float, int]:
+        index, row = entry
+        try:
+            return float(row.get("updatedAt") or row.get("lastHerAt") or 0), index
+        except (TypeError, ValueError, OverflowError):
+            return 0.0, index
+
+    _, row = max(((i, value) for i, value in enumerate(raw.values()) if isinstance(value, Mapping)),
+                 key=updated, default=(0, {}))
+    mood = row.get("mood")
+    if mood is None and isinstance(row.get("moodV"), (int, float)):
+        mood = f"{row['moodV']:.2f}"
+        if isinstance(row.get("moodA"), (int, float)):
+            mood += f"/{row['moodA']:.2f}"
+    attitude = row.get("attitude")
+    stance = attitude.get("attitudeStance") if isinstance(attitude, Mapping) else None
+    return "，".join(
+        f"{label} {value:.2f}" if isinstance(value, float) else f"{label} {str(value).strip()[:48]}"
+        for label, value in (
+            ("精力", row.get("energy")), ("情绪", mood), ("倾向", row.get("want") or row.get("agenda")),
+            ("态度", row.get("stance") or stance),
+        ) if isinstance(value, (str, int, float)) and str(value).strip()
+    )
 
 
 def _clamp_f(val: Any, lo: float, hi: float, default: float) -> float:
@@ -146,7 +219,7 @@ class PersonaAdapter:
                     seen.add(name)
                     items.append({
                         "name": name,
-                        "setting": str(row.get("setting") or "").strip()[:1000],
+                        "setting": str(row.get("setting") or "").strip()[:1800],
                         "desc": str(row.get("desc") or "").strip()[:200],
                     })
             if items:
@@ -157,6 +230,8 @@ class PersonaAdapter:
         self,
         base_dir: Path | None,
         character_name: str,
+        *,
+        exact: bool = False,
     ) -> tuple[Path | None, Path | None]:
         if base_dir is None:
             return None, None
@@ -173,7 +248,7 @@ class PersonaAdapter:
             return None, None
 
         matches = [r for r in entries if r.get("character_name") == target or r.get("id") == target]
-        if not matches and target:
+        if not matches and target and not exact:
             matches = [
                 r for r in entries
                 if r.get("character_name") and (target in r["character_name"] or r["character_name"] in target)
@@ -246,23 +321,20 @@ class PersonaAdapter:
     def read_character_profile(self, name: str, *, custom_persona_dir: str = "") -> dict[str, Any]:
         clean = str(name or "").strip()
         base_dir = self._base_persona_dir(custom_persona_dir)
-        host_rows = {r["name"]: r for r in self._read_host_characters()}
-        host_entry = host_rows.get(clean) or {}
         state_root, prof_dir = self._resolve_persona_roots(base_dir, clean)
+        return self._character_profile(clean, state_root, prof_dir)
 
-        soul_text = ""
-        soul_cands: list[Path] = []
-        if prof_dir is not None:
-            soul_cands.append(prof_dir / "soul.md")
-        if state_root is not None:
-            soul_cands.extend([state_root / "soul.md", state_root.parent / "soul.md"])
-        for cand in soul_cands:
-            if cand.is_file():
-                try:
-                    soul_text = cand.read_text(encoding="utf-8")[:700].strip()
-                    break
-                except OSError:
-                    pass
+    def _character_profile(
+        self, clean: str, state_root: Path | None, prof_dir: Path | None, *, mouth: bool = False,
+    ) -> dict[str, Any]:
+        host_entry = next((row for row in self._read_host_characters() if row["name"] == clean), {})
+        soul_cands = [root / "soul.md" for root in (prof_dir, state_root) if root is not None]
+        if mouth and clean == "七海千秋":
+            soul_cands.append(self._project_root / "plugins/nanami_persona/soul/chiaki-soul.md")
+        if not mouth and state_root is not None:
+            soul_cands.append(state_root.parent / "soul.md")
+        soul_text = next((value for path in soul_cands if (value := _read_text(path).strip())), "")
+        setting = host_entry.get("setting", "")
 
         defaults: dict[str, float] = {
             "effortfulControl": 0.72,
@@ -318,13 +390,12 @@ class PersonaAdapter:
         if not style_tags:
             style_tags.append("温和务实、按直觉观察细节")
 
-        setting_fallback = str(host_entry.get("setting") or "").strip()[:500]
         return {
             "name": clean or "无名角色",
             "persona_bound": bool((state_root and state_root.is_dir()) or (prof_dir and prof_dir.is_dir())),
             "has_traits_file": has_traits_file,
-            "soul_text": soul_text or setting_fallback,
-            "setting_summary": setting_fallback,
+            "soul_text": (soul_text or setting)[:1800] if mouth else soul_text[:700] or setting[:500],
+            "setting_summary": setting[:500],
             "traits_summary": {
                 "effortful_control": merged["effortfulControl"],
                 "social_efficacy": merged["socialEfficacy"],
@@ -339,6 +410,36 @@ class PersonaAdapter:
                 "domain_efficacy_game": merged["domainEfficacy.game"],
             },
             "style_tags": style_tags,
+        }
+
+    def read_mouth_context(
+        self, name: str, *, custom_persona_dir: str = "", corpus_limit: int = 8,
+    ) -> dict[str, Any]:
+        """Read the speaker's voice references and a compact mind-state snapshot."""
+        clean = str(name or "").strip()
+        base_dir = self._base_persona_dir(custom_persona_dir)
+        state_root, prof_dir = self._resolve_persona_roots(base_dir, clean, exact=True) if clean else (None, None)
+        profile = self._character_profile(clean, state_root, prof_dir, mouth=True)
+        persona_dir = self._project_root / "plugins" / "nanami_persona"
+        toolkit = persona_dir / "toolkit"
+        guard = persona_dir / "guard_bridge.mjs"
+        pairs = _corpus_pairs(prof_dir / "corpus.tsv", corpus_limit) if prof_dir is not None else []
+        if not pairs and profile["persona_bound"] and base_dir is not None:
+            pairs = _corpus_pairs(base_dir / "corpus" / "acg_corpus.tsv", corpus_limit)
+        words = _off_voice_words(prof_dir / "off-voice.json") if prof_dir is not None else []
+        if not words and clean == "七海千秋":
+            words = _off_voice_words(toolkit / "state" / "off-voice.json")
+        return {
+            "name": clean,
+            "persona_bound": profile["persona_bound"],
+            "soul_text": profile["soul_text"],
+            "corpus_pairs": pairs,
+            "off_voice_words": words,
+            "guard_mjs": guard if guard.is_file() else None,
+            "toolkit_dir": toolkit if toolkit.is_dir() else None,
+            "mind_hint": _mind_hint(state_root),
+            "traits_summary": profile["traits_summary"],
+            "style_tags": profile["style_tags"],
         }
 
     def read_character_relations(

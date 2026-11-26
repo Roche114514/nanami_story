@@ -802,3 +802,77 @@ def summarize_ledger_for_prompt(
         home_nm = str((ledger.get("story_role") or {}).get("home_space_name") or "本镇")
         return f"长年住在{home_nm}一带，熟悉小镇街坊与往日旧事。"
     return "刚刚暂留这座小镇，对镇上居民与旧事仍在逐步了解之中。"
+
+
+def active_dialogue_beat(session: Mapping[str, Any]) -> tuple[Any, Any]:
+    thread = next((t for t in reversed(session.get("threads") or ()) if t.get("status") == "active"), None)
+    node = next((n for n in thread["nodes"] if n["node_id"] == thread["active_node_id"]), None) if thread else None
+    return thread, node
+
+
+def ingest_dialogue_turn(
+    session: dict[str, Any], *, user_text: str, assistant_utterances: Sequence[Mapping[str, Any]],
+    present_characters: Sequence[str], turn_index: int, sim_min: float = 0.0,
+) -> list[dict[str, Any]]:
+    """Record what each participant could actually hear in the accepted exchange."""
+    _, node = active_dialogue_beat(session)
+    if node is None:
+        return []
+    ledgers = session["ledgers"]
+    all_cast = {
+        row["host_character"].casefold(): aid for aid, row in ledgers.items() if row.get("host_character")
+    }
+    present = {all_cast[name.casefold()] for name in present_characters if name.casefold() in all_cast}
+    is_observer = session.get("experience_mode") == "observer"
+    player = str(session.get("player_actor_id") or "")
+    lines: list[dict[str, Any]] = []
+
+    def add_line(actor_id: str, speech: Any, audience: set[str]) -> None:
+        text = clip_text(speech, 480, "")
+        if text and actor_id in ledgers:
+            aud = set(audience) | {actor_id}
+            if player and not is_observer:
+                aud.add(player)
+            lines.append({
+                "line_id": f"{node['node_id']}:{turn_index}:{len(lines) + 1}",
+                "actor_id": actor_id, "character_name": ledgers[actor_id]["name"],
+                "speech": text, "audience": sorted(aud),
+            })
+
+    if player and not is_observer:
+        add_line(player, user_text, present)
+    for utterance in assistant_utterances:
+        actor_id = all_cast.get(str(utterance.get("character_name") or "").casefold())
+        if actor_id not in present:
+            continue
+        explicit_audience = utterance.get("present_characters")
+        audience = present
+        if isinstance(explicit_audience, (list, tuple)):
+            audience = present.intersection(all_cast.get(str(name).casefold()) for name in explicit_audience)
+        add_line(actor_id, utterance.get("speech"), audience)
+    if not any(row["actor_id"] != player for row in lines):
+        return []
+    for aid, ledger in ledgers.items():
+        heard = [line for line in lines if aid in line["audience"]]
+        if heard:
+            # Each speaker gets a bounded share so a long player message cannot hide the reply.
+            budget = max(12, 200 // len(heard))
+            _append_experience(
+                ledger, seq=turn_index, sim_min=sim_min, kind="dialogue_turn",
+                summary=" / ".join(f"{line['character_name']}：{clip_text(line['speech'], budget)}"
+                                   for line in heard),
+                space_id="", space_label=node.get("scene_name", ""),
+                related_actor_ids=list(dict.fromkeys(line["actor_id"] for line in heard)),
+            )
+    node["recent_dialogue_lines"] = (node.get("recent_dialogue_lines", []) + lines)[-48:]
+    node["turns_in_node"] = int(node.get("turns_in_node", 0)) + 1
+    session["turn_count"] = int(session.get("turn_count", 0)) + 1
+    return lines
+
+
+def active_director_whispers(session: Mapping[str, Any], actor_name: str = "") -> list[dict[str, Any]]:
+    return [
+        row for row in session.get("director_whispers", [])
+        if int(row.get("expires_after_turn", 0)) > int(session.get("turn_count", 0))
+        and (not row.get("target") or row["target"].casefold() == actor_name.casefold())
+    ]

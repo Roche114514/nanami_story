@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import copy
-import json
 import logging
-import os
 import re
 import threading
 import time
@@ -14,17 +12,25 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from .adapters.background_adapter import (
+    BACKGROUND_SCENE_KEYS, BackgroundAdapter, background_scene_fields, resolve_catalog_scene,
+)
 from .adapters.llm_adapter import ask_llm_json
 from .adapters.persona_adapter import PersonaAdapter
 from .adapters.world_adapter import WorldAdapter
-from .beat_weaver import build_fate_overlay, weave_next_beat, weave_opening_thread
+from .beat_weaver import (
+    build_fate_overlay, evaluate_and_weave_dialogue_beat, preview_dialogue_opening,
+    weave_dialogue_opening, weave_next_beat, weave_opening_thread,
+)
 from .character_chronicle import (
+    active_dialogue_beat,
     apply_choice_to_ledger,
+    ingest_dialogue_turn,
     ingest_world_events,
     resolve_thread_lead_ids,
     sync_cast_ledgers,
 )
-from .choice_engine import decide_actor_choice
+from .choice_engine import decide_actor_choice, decide_dialogue_actor_choice
 from .fate_schema import (
     NATIVE_RESIDENT_ARCHETYPES,
     STANCE_LABELS,
@@ -36,25 +42,48 @@ from .fate_schema import (
     make_fate_session,
     normalize_max_nodes,
 )
+from .settings import (
+    ChatBindingsStore, DialoguePresetStore, atomic_write_json, canonical_history_path,
+    dialogue_character_names, dialogue_write_lock, file_mtime_ns, normalize_dialogue_background,
+    normalize_dialogue_preset, read_json_object,
+)
 
 logger = logging.getLogger(__name__)
 
-
-def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+OBSERVER_CONTINUE_CUE = "（剧情继续）"
+OBSERVER_DEFAULT_MAX_AUTO_TURNS = 0
+OBSERVER_PENDING_TIMEOUT_SEC = 180.0
+OBSERVER_MAX_SUBMIT_FAILURES = 3
 
 
-def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.is_file():
-        return None
+def _normalize_observer_max_turns(value: Any, default: int = OBSERVER_DEFAULT_MAX_AUTO_TURNS) -> int:
+    if value is None:
+        return default
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        return raw if isinstance(raw, dict) else None
-    except (OSError, ValueError):
-        return None
+        return max(0, min(1000, int(value)))
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _clamp_observer_interval(value: Any, default: float = 8.0) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed != parsed:
+        return default
+    return max(3.0, min(60.0, parsed))
+
+
+def dialogue_stage_cue(session: Mapping[str, Any], *, is_opening: bool = False) -> str:
+    """根据体验模式与当前轮次生成推入宿主聊天的开场/续演信号。"""
+    if session.get("experience_mode") == "observer":
+        if is_opening or int(session.get("turn_count") or 0) == 0:
+            if len(session.get("dialogue_cast") or ()) > 1:
+                return "（剧目开场，在场角色自然展开互动）"
+            return "（剧目开场，独自沉浸在当下处境中展开）"
+        return OBSERVER_CONTINUE_CUE
+    return "就从此刻开始吧。"
 
 
 def _infer_stage_atmosphere(title: str, world_prompt: str, outline: str) -> tuple[float, str]:
@@ -83,12 +112,17 @@ class FateSessionStore:
 
     def __init__(self, data_root: Path) -> None:
         self._dir = Path(data_root) / "fate_sessions"
+        self._mtimes: dict[Path, int] = {}
 
-    def save(self, session: Mapping[str, Any]) -> None:
+    def save(self, session: dict[str, Any]) -> None:
         sid = str(session.get("session_id") or "").strip()
         if not sid:
             return
-        _atomic_write_json(self._dir / f"{sid}.json", session)
+        path = self._dir / f"{sid}.json"
+        revision = int(session.get("revision", 0)) + 1
+        atomic_write_json(path, {**session, "revision": revision})
+        session["revision"] = revision
+        self._mtimes[path] = file_mtime_ns(path)
 
     def delete(self, session_id: str) -> None:
         sid = str(session_id or "").strip()
@@ -98,20 +132,29 @@ class FateSessionStore:
         if path.is_file():
             try:
                 path.unlink()
+                self._mtimes.pop(path, None)
             except OSError:
                 logger.debug("删除命运会话文件失败：%s", path, exc_info=True)
 
     def load_all(self) -> dict[str, dict[str, Any]]:
         out: dict[str, dict[str, Any]] = {}
-        if not self._dir.is_dir():
-            return out
-        for p in sorted(self._dir.glob("*.json")):
-            if p.name.endswith(".tmp") or p.name.startswith("."):
-                continue
-            raw = _read_json(p)
-            if isinstance(raw, dict) and raw.get("session_id") and raw.get("version") == 3:
-                out[str(raw["session_id"])] = raw
+        self._mtimes.clear()
+        self.reload_if_changed(out)
         return out
+
+    def reload_if_changed(self, sessions: dict[str, dict[str, Any]]) -> None:
+        paths = {p for p in self._dir.glob("*.json") if not p.name.startswith(".")}
+        for path in self._mtimes.keys() - paths:
+            self._mtimes.pop(path)
+            sessions.pop(path.stem, None)
+        for path in sorted(paths):
+            stamp = file_mtime_ns(path)
+            if stamp is None or self._mtimes.get(path) == stamp:
+                continue
+            raw = read_json_object(path)
+            if raw and raw.get("session_id") == path.stem and raw.get("version") == 3:
+                sessions[path.stem] = raw
+                self._mtimes[path] = stamp
 
 
 class FateRuntime:
@@ -125,13 +168,17 @@ class FateRuntime:
         *,
         settings_provider: Callable[[], Any] | None = None,
         llm_fn: Callable[[str, str], dict[str, Any] | None] | None = None,
+        background_adapter: BackgroundAdapter | None = None,
     ) -> None:
         self._world = world_adapter
         self._persona = persona_adapter
+        self._background_adapter = background_adapter if background_adapter is not None else BackgroundAdapter(Path.cwd())
         self._data_root = Path(data_root)
         self._settings_provider = settings_provider
         self._llm_fn = llm_fn
         self._store = FateSessionStore(self._data_root)
+        self._chat_bindings = ChatBindingsStore(self._data_root)
+        self.dialogue_presets = DialoguePresetStore(self._data_root)
         self._lock = threading.RLock()
         self._sessions: dict[str, dict[str, Any]] = {}
         self._model_jobs = ThreadPoolExecutor(max_workers=2, thread_name_prefix="nanami-fate-weaver")
@@ -139,6 +186,10 @@ class FateRuntime:
         self._inflight: set[tuple[str, ...]] = set()
         self._dialogue_realms: set[str] = set()
         self._closed = False
+        self._pending_dialogue: dict[str, tuple[bool, bool]] = {}
+        self._active_chat_history_path: str = ""
+        self._observer_autoplay_state: dict[str, dict[str, Any]] = {}
+        self._pending_observer_openings: dict[str, str] = {}
 
     def close(self) -> None:
         with self._lock:
@@ -235,12 +286,20 @@ class FateRuntime:
         except (RuntimeError, ValueError):
             logger.debug("推送命运编年史面板失败：%s", realm, exc_info=True)
 
-    def restore_sessions(self) -> list[dict[str, Any]]:
+    def restore_sessions(self, *, restore_world: bool = True) -> list[dict[str, Any]]:
         with self._lock:
-            loaded = self._store.load_all()
-            self._sessions.update(loaded)
+            self._sessions = self._store.load_all()
+            self._observer_autoplay_state.clear()
+            self._pending_observer_openings.clear()
             for sid, sess in self._sessions.items():
-                if sess.get("status") != "active":
+                if sess.get("mode") == "dialogue":
+                    if sess.get("observer_autoplay") is not False or sess.get("observer_status_note"):
+                        sess["observer_autoplay"] = False
+                        sess["observer_status_note"] = ""
+                        if restore_world:
+                            self._store.save(sess)
+                    continue
+                if not restore_world or sess.get("status") != "active":
                     continue
                 realm = str(sess.get("realm_space_id") or "")
                 if realm and self._world.available():
@@ -262,6 +321,7 @@ class FateRuntime:
 
     def list_sessions(self) -> list[dict[str, Any]]:
         with self._lock:
+            self._store.reload_if_changed(self._sessions)
             rows = sorted(
                 self._sessions.values(),
                 key=lambda s: float(s.get("updated_at") or s.get("created_at") or 0.0),
@@ -271,6 +331,7 @@ class FateRuntime:
 
     def get_session(self, session_id: str) -> dict[str, Any] | None:
         with self._lock:
+            self._store.reload_if_changed(self._sessions)
             s = self._sessions.get(str(session_id or "").strip())
             return copy.deepcopy(s) if s is not None else None
 
@@ -283,6 +344,807 @@ class FateRuntime:
                 if sess.get("status") == "active" and sess.get("realm_space_id") == target:
                     return copy.deepcopy(sess)
             return None
+
+    def list_chat_bindings(self) -> dict[str, Any]:
+        with self._lock:
+            return copy.deepcopy(self._chat_bindings.reload_if_changed())
+
+    def get_bound_dialogue_session(self, history_path: str) -> dict[str, Any] | None:
+        path = canonical_history_path(history_path)
+        with self._lock:
+            binding = self._chat_bindings.reload_if_changed().get(path)
+            session = self.get_session(binding["session_id"]) if binding else None
+            if (session and session.get("mode") == "dialogue" and session.get("status") == "active"
+                    and session.get("linked_history_path") == path):
+                return session
+        return None
+
+    def _dialogue_session_locked(self, session_id: str, history_path: str = "") -> dict[str, Any]:
+        self._store.reload_if_changed(self._sessions)
+        session = self._sessions.get(session_id)
+        if not session or session.get("mode") != "dialogue":
+            raise ValueError("找不到对话剧本。")
+        if history_path:
+            path = canonical_history_path(history_path)
+            binding = self._chat_bindings.reload_if_changed().get(path) or {}
+            if session.get("linked_history_path") != path or binding.get("session_id") != session_id:
+                raise ValueError("对话剧本的绑定已变更。")
+        return session
+
+    def _save_dialogue_locked(self, session: dict[str, Any]) -> None:
+        session["updated_at"] = time.time()
+        self._store.save(session)
+        self._sessions[session["session_id"]] = session
+
+    def _sync_dialogue_cast(self, session: dict[str, Any], characters: Sequence[str]) -> bool:
+        names = dialogue_character_names(characters)
+        if not names:
+            return False
+        changed = session.get("dialogue_cast") != names
+        session["dialogue_cast"] = names
+        for name in names:
+            aid = f"character:{name.casefold()}"
+            if aid not in session["ledgers"]:
+                profile = self._persona.read_character_profile(name, custom_persona_dir=self._custom_persona_dir())
+                session["ledgers"][aid] = make_character_ledger(
+                    aid, name, host_character=name, persona_profile=profile,
+                    story_role={"role_category": "participant", "local_role": "谈话的参与者"},
+                )
+                changed = True
+        return changed
+
+    def list_host_backgrounds(self) -> list[dict[str, Any]]:
+        return self._background_adapter.list_backgrounds()
+
+    def _dialogue_background_catalog(
+        self, source: Mapping[str, Any], *, required: bool = False,
+    ) -> dict[str, Any] | None:
+        if source.get("background_mode") != "shinsekai":
+            return None
+        name = str(source.get("opening_background") or "")
+        catalog = self._background_adapter.get_background(name) if name else None
+        if catalog and catalog.get("scenes"):
+            return catalog
+        if required:
+            if not name:
+                raise ValueError("请选择 Shinsekai 内置背景组。")
+            raise ValueError(f"Shinsekai 内置背景组「{name}」不存在或没有可用场景。")
+        return None
+
+    def _preview_dialogue_story(
+        self, raw: Mapping[str, Any], spec: Mapping[str, Any], catalog: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        if not spec["characters"]:
+            raise ValueError("请至少选择一位参与对话的角色。")
+        recent = raw.get("recent_chat_turns")
+        return preview_dialogue_opening(
+            title=spec["title"], theme_compass=spec["theme_compass"], outline=spec["outline"],
+            characters=spec["characters"], recent_chat_turns=recent if isinstance(recent, list) else (),
+            custom_draft=spec["custom_draft"] or None, experience_mode=spec["experience_mode"],
+            use_llm=self._effective_use_llm(raw.get("use_llm")), llm_fn=self._llm_fn,
+            background_catalog=catalog, opening_scene_index=spec["opening_scene_index"],
+            allow_scene_transitions=spec["allow_scene_transitions"],
+        )
+
+    def preview_dialogue_story(self, raw: Mapping[str, Any]) -> dict[str, Any]:
+        spec = normalize_dialogue_preset(raw)
+        return self._preview_dialogue_story(raw, spec, self._dialogue_background_catalog(spec, required=True))
+
+    def start_dialogue_story(self, raw: Mapping[str, Any]) -> dict[str, Any]:
+        spec = normalize_dialogue_preset(raw)
+        exp_mode = spec["experience_mode"]
+        catalog = self._dialogue_background_catalog(spec, required=True)
+        if catalog:
+            spec["opening_background"] = catalog["name"]
+        draft = self._preview_dialogue_story(raw, spec, catalog)
+        spec["custom_draft"] = draft
+        player_id = "" if exp_mode == "observer" else "player"
+        ledgers = {} if exp_mode == "observer" else {player_id: make_character_ledger(player_id, "玩家", is_player=True)}
+        session = make_fate_session(
+            mode="dialogue", title=spec["title"], experience_mode=exp_mode, player_actor_id=player_id,
+            reveal_inner_thoughts=bool(raw.get("reveal_inner_thoughts", False)),
+            ledgers=ledgers, scene_context=normalize_dialogue_background(spec),
+        )
+        preferred = exp_mode == "observer" and bool(raw.get("observer_autoplay", spec["observer_autoplay"]))
+        spec["observer_autoplay"] = preferred
+        session["dialogue_preset"] = spec
+        session["observer_autoplay_preferred"] = preferred
+        session["observer_autoplay"] = False
+        session["observer_interval_sec"] = spec["observer_interval_sec"]
+        session["observer_status_note"] = ""
+        self._sync_dialogue_cast(session, spec["characters"])
+        thread = weave_dialogue_opening(
+            session, title=spec["title"], theme_compass=draft["theme_compass"], max_nodes=spec["max_nodes"],
+            custom_draft=draft, experience_mode=exp_mode, use_llm=False,
+            background_catalog=catalog, opening_scene_index=spec["opening_scene_index"],
+            allow_scene_transitions=spec["allow_scene_transitions"],
+        )
+        self._add_dialogue_thread(session, thread, use_llm=self._effective_use_llm(raw.get("use_llm")))
+        with self._lock, dialogue_write_lock(self._data_root):
+            if raw.get("history_path"):
+                self._bind_dialogue_locked(session, str(raw["history_path"]), str(raw.get("conversation_id") or ""))
+                if exp_mode == "observer" and raw.get("observer_autoplay") and session["linked_history_path"]:
+                    session["observer_autoplay"] = True
+                    self._save_dialogue_locked(session)
+                    self._active_chat_history_path = session["linked_history_path"]
+                    self._observer_autoplay_state[session["session_id"]] = {
+                        "pending_turn": None,
+                        "last_dispatched_at": 0.0,
+                        "last_turn_at": time.monotonic(),
+                        "auto_turns": 0,
+                        "max_auto_turns": OBSERVER_DEFAULT_MAX_AUTO_TURNS,
+                        "submit_failures": 0,
+                    }
+            else:
+                self._save_dialogue_locked(session)
+            return copy.deepcopy(session)
+
+    def _bind_dialogue_locked(self, session: dict[str, Any], history_path: str, conversation_id: str) -> None:
+        path = canonical_history_path(history_path)
+        sid = session["session_id"]
+        bindings = dict(self._chat_bindings.reload_if_changed())
+        other = bindings.get(path)
+        if other and other.get("session_id") != sid:
+            self._store.reload_if_changed(self._sessions)
+            existing = self._sessions.get(other.get("session_id"))
+            if existing and existing.get("linked_history_path") == path:
+                raise ValueError("此对话已有绑定的剧本，请先解除原绑定。")
+        original = self._sessions.get(sid)
+        bindings = {key: row for key, row in bindings.items() if row.get("session_id") != sid}
+        if path != session.get("linked_history_path", ""):
+            for key in ("dialogue_history_cursor", "dialogue_checkpoint_base", "dialogue_turn_signatures"):
+                session.pop(key, None)
+            session["turn_checkpoints"] = []
+            session["observer_autoplay"] = False
+            session["observer_status_note"] = ""
+            self._observer_autoplay_state.pop(sid, None)
+            self._pending_observer_openings.pop(sid, None)
+        session["linked_history_path"] = path
+        session["linked_conversation_id"] = conversation_id if path else ""
+        if path:
+            bindings[path] = {
+                "session_id": sid, "history_path": path, "conversation_id": conversation_id,
+                "characters": session["dialogue_cast"], "updated_at": time.time(),
+            }
+        self._save_dialogue_locked(session)
+        try:
+            self._chat_bindings.replace(bindings)
+        except OSError:
+            if original:
+                self._save_dialogue_locked({**original, "revision": session["revision"]})
+            else:
+                self._store.delete(sid)
+                self._sessions.pop(sid, None)
+            raise
+
+    def bind_dialogue_session(
+        self, session_id: str, history_path: str, *, conversation_id: str = "", characters: Sequence[str] = (),
+    ) -> dict[str, Any]:
+        with self._lock, dialogue_write_lock(self._data_root):
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+            self._sync_dialogue_cast(session, characters)
+            self._bind_dialogue_locked(session, history_path, conversation_id)
+            return copy.deepcopy(session)
+
+    def toggle_dialogue_pause(self, session_id: str, paused: bool | None = None) -> dict[str, Any]:
+        with self._lock, dialogue_write_lock(self._data_root):
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+            session["paused"] = not session.get("paused") if paused is None else bool(paused)
+            if session["paused"]:
+                session["observer_autoplay"] = False
+                self._observer_autoplay_state.pop(session_id, None)
+                self._pending_observer_openings.pop(session_id, None)
+            self._save_dialogue_locked(session)
+            return copy.deepcopy(session)
+
+    def inject_director_whisper(
+        self, session_id: str, text: str, *, target: str = "", duration_turns: int = 2,
+    ) -> dict[str, Any]:
+        direction = clip_text(text, 240)
+        if not direction:
+            raise ValueError("请输入导演耳语。")
+        with self._lock, dialogue_write_lock(self._data_root):
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+            if target and target.casefold() not in {name.casefold() for name in session["dialogue_cast"]}:
+                raise ValueError("导演耳语的对象不在当前对话中。")
+            turn = session["turn_count"]
+            whispers = [row for row in session["director_whispers"] if row["expires_after_turn"] > turn]
+            whispers.append({"text": direction, "target": target, "expires_after_turn":
+                             turn + max(1, min(24, int(duration_turns)))})
+            session["director_whispers"] = whispers[-12:]
+            self._save_dialogue_locked(session)
+            return copy.deepcopy(session)
+
+    def _add_dialogue_thread(self, session: dict[str, Any], thread: dict[str, Any], *, use_llm: bool) -> None:
+        session["threads"].append(thread)
+        for aid, role in thread["resident_roles"].items():
+            session["ledgers"][aid]["story_role"].update(role)
+        self._prepare_dialogue_node(session, thread, thread["nodes"][0], use_llm=use_llm)
+
+    def _prepare_dialogue_node(self, session: dict[str, Any], thread: dict[str, Any], node: dict[str, Any],
+                               *, use_llm: bool) -> None:
+        scene_context = session["scene_context"]
+        scene_context.update(scene_name=node["scene_name"], atmosphere=node["atmosphere"])
+        for key in BACKGROUND_SCENE_KEYS:
+            if key in node:
+                scene_context[key] = node[key]
+            else:
+                scene_context.pop(key, None)
+        for name in session["dialogue_cast"]:
+            aid = f"character:{name.casefold()}"
+            choice = decide_dialogue_actor_choice(
+                session, thread, node, aid, self._persona, use_llm=use_llm, llm_fn=self._llm_fn,
+                custom_persona_dir=self._custom_persona_dir(),
+            )
+            node["participant_choices"][aid] = choice
+            apply_choice_to_ledger(session["ledgers"][aid], choice)
+
+    def pluck_dialogue_thread(
+        self, session_id: str, *, theme_compass: str = "auto", prompt_hint: str = "", use_llm: bool | None = None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+        if active_dialogue_beat(session)[0]:
+            raise ValueError("请先收束当前对话篇章。")
+        latest = session["threads"][-1]
+        spec = session["dialogue_preset"]
+        scene_context = session.get("scene_context") or {}
+        title = f"{session['title'][:46]} · {len(session['threads']) + 1}"
+        current_cast = {f"character:{name.casefold()}" for name in session["dialogue_cast"]}
+        recent = [
+            {"text": f"{line['character_name']}：{line['speech']}", "role": "assistant"}
+            for node in latest["nodes"] for line in node["recent_dialogue_lines"]
+            if current_cast.issubset(line["audience"])
+        ][-8:]
+        eff_llm = self._effective_use_llm(use_llm)
+        thread = weave_dialogue_opening(
+            session, title=title, theme_compass=latest["theme_compass"] if theme_compass == "auto" else theme_compass,
+            max_nodes=spec["max_nodes"], outline=prompt_hint, recent_chat_turns=recent, use_llm=eff_llm, llm_fn=self._llm_fn,
+            background_catalog=self._dialogue_background_catalog(scene_context),
+            opening_scene_index=scene_context.get("opening_scene_index", 0),
+            allow_scene_transitions=scene_context.get("allow_scene_transitions", True),
+        )
+        for aid, role in thread["resident_roles"].items():
+            prior = latest["resident_roles"].get(aid, {})
+            if role.get("local_role") == "谈话的参与者" and prior.get("local_role"):
+                role["local_role"] = prior["local_role"]
+            if not role.get("relationship_to_incident") and prior.get("relationship_to_incident"):
+                role["relationship_to_incident"] = prior["relationship_to_incident"]
+        self._add_dialogue_thread(session, thread, use_llm=eff_llm)
+        with self._lock, dialogue_write_lock(self._data_root):
+            live = self._dialogue_session_locked(session_id)
+            if live["revision"] != session["revision"]:
+                raise ValueError("剧本状态已更新，请再试一次。")
+            self._refresh_dialogue_checkpoint(session)
+            self._save_dialogue_locked(session)
+            return {"session": copy.deepcopy(session), "thread": copy.deepcopy(thread)}
+
+    _DIALOGUE_CHECKPOINT_FIELDS = (
+        "threads", "ledgers", "chronicle_archive", "scene_context", "turn_count", "dialogue_turn_signatures",
+    )
+
+    def _dialogue_checkpoint(self, session: Mapping[str, Any], cursor: Mapping[str, Any]) -> dict[str, Any]:
+        return {**cursor, "state": {key: copy.deepcopy(session[key]) for key in self._DIALOGUE_CHECKPOINT_FIELDS
+                                    if key in session}}
+
+    def _refresh_dialogue_checkpoint(self, session: dict[str, Any]) -> None:
+        cursor = session.get("dialogue_history_cursor")
+        if cursor is None:
+            return
+        checkpoint = self._dialogue_checkpoint(session, cursor)
+        previous = [row for row in session["turn_checkpoints"] if not all(row.get(k) == v for k, v in cursor.items())]
+        session["turn_checkpoints"] = (previous + [checkpoint])[-24:]
+
+    def _restore_dialogue_prefix(self, session: dict[str, Any], prefixes: Sequence[str]) -> bool:
+        if not prefixes:
+            return False
+
+        def matches(row: Mapping[str, Any]) -> bool:
+            count = row["user_turn_count"]
+            return 0 <= count < len(prefixes) and prefixes[count] == row["user_history_fingerprint"]
+
+        cursor = session.get("dialogue_history_cursor")
+        if cursor is None:
+            index = len(prefixes) - 1
+            cursor = {"user_turn_count": index, "user_history_fingerprint": prefixes[index]}
+            session["dialogue_history_cursor"] = cursor
+            session["dialogue_checkpoint_base"] = self._dialogue_checkpoint(session, cursor)
+            return True
+        base = session["dialogue_checkpoint_base"]
+        checkpoint = max(
+            (row for row in reversed(session["turn_checkpoints"]) if matches(row)),
+            key=lambda row: row["user_turn_count"], default=base,
+        )
+        if matches(cursor) and checkpoint["user_turn_count"] <= cursor["user_turn_count"]:
+            return False
+        for key in self._DIALOGUE_CHECKPOINT_FIELDS:
+            session.pop(key, None)
+        session.update(copy.deepcopy(checkpoint["state"]))
+        # Keep session-wide background settings when revisiting an older chat branch.
+        background = normalize_dialogue_background(session.get("dialogue_preset") or {})
+        if normalize_dialogue_background(session.get("scene_context") or {}) != background:
+            self._apply_dialogue_background(session, background, self._dialogue_background_catalog(background))
+        index = checkpoint["user_turn_count"] if matches(checkpoint) else len(prefixes) - 1
+        session["dialogue_history_cursor"] = {
+            "user_turn_count": index, "user_history_fingerprint": prefixes[index],
+        }
+        return True
+
+    def sync_dialogue_checkpoint(
+        self, session_id: str, *, user_history_prefixes: Sequence[str] = (),
+        characters: Sequence[str] = (), history_path: str = "",
+        expected_history_cursor: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with self._lock, dialogue_write_lock(self._data_root):
+            session = copy.deepcopy(self._dialogue_session_locked(session_id, history_path))
+            if session["paused"] or (expected_history_cursor is not None
+                                     and expected_history_cursor != (session.get("dialogue_history_cursor") or {})):
+                return session
+            changed = self._restore_dialogue_prefix(session, user_history_prefixes)
+            if self._sync_dialogue_cast(session, characters) or changed:
+                self._save_dialogue_locked(session)
+            return session
+
+    def ingest_host_dialogue_turn(
+        self, session_id: str, *, user_text: str, assistant_utterances: Sequence[Mapping[str, Any]],
+        present_characters: Sequence[str], user_history_prefixes: Sequence[str] = (),
+        turn_signature: str = "", history_path: str = "", use_llm: bool | None = None,
+        sync_models: bool = False, expected_history_cursor: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with self._lock, dialogue_write_lock(self._data_root):
+            if history_path:
+                self._active_chat_history_path = canonical_history_path(history_path)
+            session = copy.deepcopy(self._dialogue_session_locked(session_id, history_path))
+            if session["paused"] or (turn_signature and turn_signature in session.get("dialogue_turn_signatures", ())):
+                return session
+            if expected_history_cursor is not None and expected_history_cursor != (session.get("dialogue_history_cursor") or {}):
+                # Delayed Bridge requests must not replay over a newer reply or fork.
+                return session
+            if user_history_prefixes:
+                index = len(user_history_prefixes) - 1
+                cursor = {"user_turn_count": index, "user_history_fingerprint": user_history_prefixes[index]}
+                if (session.get("dialogue_history_cursor") == cursor and index
+                        and any(all(row.get(k) == v for k, v in cursor.items()) for row in session["turn_checkpoints"])):
+                    return session
+                self._restore_dialogue_prefix(session, user_history_prefixes[:-1] if user_text else user_history_prefixes)
+                session["dialogue_history_cursor"] = cursor
+            self._sync_dialogue_cast(session, present_characters)
+            lines = ingest_dialogue_turn(
+                session, user_text=user_text, assistant_utterances=assistant_utterances,
+                present_characters=present_characters, turn_index=session["turn_count"] + 1,
+            )
+            if not lines:
+                return copy.deepcopy(self._sessions[session_id])
+            if turn_signature:
+                session["dialogue_turn_signatures"] = (session.get("dialogue_turn_signatures", []) + [turn_signature])[-48:]
+            if session_id in self._observer_autoplay_state:
+                tracker = self._observer_autoplay_state[session_id]
+                tracker["pending_turn"] = None
+                tracker["last_turn_at"] = time.monotonic()
+                tracker["submit_failures"] = 0
+            self._pending_observer_openings.pop(session_id, None)
+            self._refresh_dialogue_checkpoint(session)
+            self._save_dialogue_locked(session)
+        return self.advance_dialogue_beat(session_id, use_llm=use_llm, sync_models=sync_models, force_evaluate=False)
+
+    def _evaluate_dialogue_snapshot(self, session_id: str, *, force_evaluate: bool, use_llm: bool) -> None:
+        with self._lock:
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+        thread, node = active_dialogue_beat(session)
+        if not node or (session["paused"] and not force_evaluate):
+            return
+        result = evaluate_and_weave_dialogue_beat(
+            session, force_evaluate=force_evaluate, use_llm=use_llm, llm_fn=self._llm_fn,
+            background_catalog=self._dialogue_background_catalog(session.get("scene_context") or {}),
+        )
+        facts = list(dict.fromkeys(node["revealed_facts"] + result.get("revealed_facts", [])))[-24:]
+        note = result.get("player_stance_note")
+        action = result["action"]
+        if action == "continue_scene" and facts == node["revealed_facts"] and not note:
+            return
+        node["revealed_facts"] = facts
+        if note:
+            node["player_stance"] = {"note": note, "stance_label": "对话表态"}
+        if action != "continue_scene":
+            node.update(status="resolved", outcome_summary=result["outcome_summary"])
+        if action == "next_node":
+            next_node = result["next_node"]
+            thread["nodes"].append(next_node)
+            thread.update(active_node_id=next_node["node_id"], phase=next_node["phase"])
+            self._prepare_dialogue_node(session, thread, next_node, use_llm=use_llm)
+        elif action == "resolve":
+            chapter = result["chapter_chronicle"]
+            thread.update(status="resolved", phase="afterglow", active_node_id="", chapter_chronicle=chapter)
+            session["chronicle_archive"].append({**chapter, "thread_id": thread["thread_id"]})
+            if session.get("observer_autoplay"):
+                session["observer_autoplay"] = False
+                session["observer_status_note"] = "当前篇章已落幕，自动观剧已停止"
+                self._observer_autoplay_state.pop(session_id, None)
+        with self._lock, dialogue_write_lock(self._data_root):
+            live = self._dialogue_session_locked(session_id)
+            if live["revision"] == session["revision"]:
+                self._refresh_dialogue_checkpoint(session)
+                self._save_dialogue_locked(session)
+
+    def advance_dialogue_beat(
+        self, session_id: str, *, force_evaluate: bool = True, use_llm: bool | None = None,
+        sync_models: bool = True,
+    ) -> dict[str, Any]:
+        eff_llm = self._effective_use_llm(use_llm)
+        if sync_models:
+            self._evaluate_dialogue_snapshot(session_id, force_evaluate=force_evaluate, use_llm=eff_llm)
+        else:
+            key = ("host_dialogue", session_id)
+            with self._lock:
+                if self._closed:
+                    return copy.deepcopy(self._dialogue_session_locked(session_id))
+                previous = self._pending_dialogue.get(session_id)
+                self._pending_dialogue[session_id] = (force_evaluate or bool(previous and previous[0]), eff_llm)
+                if key not in self._inflight:
+                    self._inflight.add(key)
+                    self._model_jobs.submit(self._drain_dialogue_jobs, key, session_id)
+        return self.get_session(session_id)
+
+    def _drain_dialogue_jobs(self, key: tuple[str, ...], session_id: str) -> None:
+        while True:
+            with self._lock:
+                job = self._pending_dialogue.pop(session_id, None)
+                if self._closed or job is None:
+                    self._inflight.discard(key)
+                    return
+            try:
+                self._evaluate_dialogue_snapshot(session_id, force_evaluate=job[0], use_llm=job[1])
+            except Exception:
+                logger.debug("对话剧本推演失败：%s", session_id, exc_info=True)
+
+    def is_dialogue_evaluating(self, session_id: str) -> bool:
+        with self._lock:
+            return ("host_dialogue", session_id) in self._inflight or session_id in self._pending_dialogue
+
+    def report_active_chat(self, history_path: str, *, ready: bool = False) -> None:
+        clean = canonical_history_path(history_path)
+        with self._lock, dialogue_write_lock(self._data_root):
+            self._active_chat_history_path = clean
+            self._store.reload_if_changed(self._sessions)
+            for pending_sid, pending_path in list(self._pending_observer_openings.items()):
+                if pending_path != clean:
+                    self._pending_observer_openings.pop(pending_sid, None)
+            now = time.monotonic()
+            for sid, sess in list(self._sessions.items()):
+                if sess.get("mode") != "dialogue":
+                    continue
+                linked = sess.get("linked_history_path")
+                if sess.get("observer_autoplay") and linked != clean:
+                    updated = copy.deepcopy(sess)
+                    updated["observer_autoplay"] = False
+                    updated["observer_status_note"] = "检测到已切换对话，自动观剧已停止"
+                    self._observer_autoplay_state.pop(sid, None)
+                    self._save_dialogue_locked(updated)
+                elif (ready and clean and linked == clean and sess.get("status") == "active"
+                      and sess.get("experience_mode") == "observer" and not sess.get("paused")
+                      and active_dialogue_beat(sess)[1]):
+                    if "observer_autoplay_preferred" in sess:
+                        preferred = bool(sess["observer_autoplay_preferred"])
+                    else:
+                        preferred = (sess.get("dialogue_preset") or {}).get("observer_autoplay") is not False
+                    tracker = self._observer_autoplay_state.get(sid) or {}
+                    pending = tracker.get("pending_turn")
+                    last_dispatched = float(tracker.get("last_dispatched_at") or 0.0)
+                    recently_dispatched = pending is not None and now - last_dispatched <= OBSERVER_PENDING_TIMEOUT_SEC
+                    if preferred:
+                        self._pending_observer_openings.pop(sid, None)
+                        if not sess.get("observer_autoplay") or sess.get("observer_status_note"):
+                            self._save_dialogue_locked({**sess, "observer_autoplay": True, "observer_status_note": ""})
+                        if not recently_dispatched and (
+                            not sess.get("observer_autoplay") or not tracker or pending is not None
+                        ):
+                            tracker.update(
+                                pending_turn=None,
+                                last_dispatched_at=0.0,
+                                last_turn_at=now - _clamp_observer_interval(sess.get("observer_interval_sec")),
+                                auto_turns=0,
+                                max_auto_turns=_normalize_observer_max_turns(None),
+                                submit_failures=0,
+                            )
+                            self._observer_autoplay_state[sid] = tracker
+                    elif int(sess.get("turn_count") or 0) == 0 and not recently_dispatched:
+                        self._pending_observer_openings[sid] = clean
+
+    @staticmethod
+    def _apply_dialogue_background(
+        session: dict[str, Any], background: Mapping[str, Any], catalog: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        scene_context = session.setdefault("scene_context", {})
+        scene_context.update(background)
+        _, node = active_dialogue_beat(session)
+        for key in BACKGROUND_SCENE_KEYS:
+            scene_context.pop(key, None)
+            if node is not None:
+                node.pop(key, None)
+        if not node or not catalog:
+            return {}
+        scenes = catalog["scenes"]
+        scene = resolve_catalog_scene(
+            scenes, scene_index=background["opening_scene_index"], scene_name=node.get("scene_name", ""),
+        ) or scenes[0]
+        fields = background_scene_fields(catalog["name"], scene)
+        node.update(fields)
+        scene_context.update(fields)
+        return fields
+
+    def set_dialogue_background(
+        self, session_id: str, *, background_mode: str = "custom", opening_background: str = "",
+        opening_scene_index: int = 0, allow_scene_transitions: bool = True,
+    ) -> dict[str, Any]:
+        mode = str(background_mode or "custom").strip().lower()
+        if mode not in {"custom", "shinsekai"}:
+            raise ValueError("无效的对话剧本背景模式。")
+        background = normalize_dialogue_background({
+            "background_mode": mode, "opening_background": opening_background,
+            "opening_scene_index": opening_scene_index, "allow_scene_transitions": allow_scene_transitions,
+        })
+        catalog = self._dialogue_background_catalog(background, required=True)
+        if catalog:
+            background["opening_background"] = catalog["name"]
+        with self._lock, dialogue_write_lock(self._data_root):
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+            fields = self._apply_dialogue_background(session, background, catalog)
+            preset = session.setdefault("dialogue_preset", {})
+            preset.update(background)
+            draft = preset.get("custom_draft")
+            if isinstance(draft, dict):
+                for key in BACKGROUND_SCENE_KEYS:
+                    draft.pop(key, None)
+                draft.update(fields)
+            self._refresh_dialogue_checkpoint(session)
+            self._save_dialogue_locked(session)
+            return copy.deepcopy(session)
+
+    def set_dialogue_experience_mode(self, session_id: str, experience_mode: str) -> dict[str, Any]:
+        target = str(experience_mode or "co_play").strip().lower()
+        if target not in VALID_EXPERIENCE_MODES:
+            raise ValueError("无效的对话剧本体验模式。")
+        with self._lock, dialogue_write_lock(self._data_root):
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+            session["experience_mode"] = target
+            if isinstance(session.get("dialogue_preset"), dict):
+                session["dialogue_preset"]["experience_mode"] = target
+            if target == "observer":
+                session["player_actor_id"] = ""
+                session.get("ledgers", {}).pop("player", None)
+                session["observer_interval_sec"] = _clamp_observer_interval(session.get("observer_interval_sec"))
+            else:
+                session["player_actor_id"] = "player"
+                ledgers = session.setdefault("ledgers", {})
+                if "player" not in ledgers:
+                    ledgers["player"] = make_character_ledger("player", "玩家", is_player=True)
+                session["observer_autoplay"] = False
+                session["observer_autoplay_preferred"] = False
+                if isinstance(session.get("dialogue_preset"), dict):
+                    session["dialogue_preset"]["observer_autoplay"] = False
+                session["observer_status_note"] = ""
+                self._observer_autoplay_state.pop(session_id, None)
+                self._pending_observer_openings.pop(session_id, None)
+            self._save_dialogue_locked(session)
+            return copy.deepcopy(session)
+
+    def set_dialogue_observer_autoplay(
+        self,
+        session_id: str,
+        *,
+        enabled: bool,
+        interval_sec: float | None = None,
+        history_path: str = "",
+        max_auto_turns: int | None = OBSERVER_DEFAULT_MAX_AUTO_TURNS,
+        persist_preference: bool = False,
+    ) -> dict[str, Any]:
+        with self._lock, dialogue_write_lock(self._data_root):
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+            if interval_sec is not None:
+                clamped = _clamp_observer_interval(interval_sec)
+                session["observer_interval_sec"] = clamped
+                if isinstance(session.get("dialogue_preset"), dict):
+                    session["dialogue_preset"]["observer_interval_sec"] = clamped
+            if enabled:
+                if session.get("experience_mode") != "observer":
+                    raise ValueError("请先将此剧本切换为观剧模式。")
+                if not session.get("linked_history_path"):
+                    raise ValueError("请先将此剧本绑定到对话。")
+                if session.get("paused"):
+                    raise ValueError("剧本注入已暂停，请先恢复。")
+                if not active_dialogue_beat(session)[1]:
+                    raise ValueError("当前篇章已落幕，请先拨动新丝线。")
+                session["observer_autoplay"] = True
+                session["observer_status_note"] = ""
+                clean = canonical_history_path(history_path) or session["linked_history_path"]
+                self._active_chat_history_path = clean
+                self._observer_autoplay_state[session_id] = {
+                    "pending_turn": None,
+                    "last_dispatched_at": 0.0,
+                    "last_turn_at": time.monotonic(),
+                    "auto_turns": 0,
+                    "max_auto_turns": _normalize_observer_max_turns(max_auto_turns),
+                    "submit_failures": 0,
+                }
+            else:
+                session["observer_autoplay"] = False
+                session["observer_status_note"] = ""
+                self._observer_autoplay_state.pop(session_id, None)
+                self._pending_observer_openings.pop(session_id, None)
+            if persist_preference:
+                session["observer_autoplay_preferred"] = bool(enabled)
+                if isinstance(session.get("dialogue_preset"), dict):
+                    session["dialogue_preset"]["observer_autoplay"] = bool(enabled)
+            self._save_dialogue_locked(session)
+            return copy.deepcopy(session)
+
+    def mark_observer_cue_dispatched(
+        self,
+        session_id: str,
+        turn_count: int,
+        history_path: str = "",
+        *,
+        count_as_auto: bool = False,
+        now: float | None = None,
+    ) -> None:
+        ts = time.monotonic() if now is None else float(now)
+        clean = canonical_history_path(history_path)
+        with self._lock:
+            self._pending_observer_openings.pop(session_id, None)
+            if clean:
+                self._active_chat_history_path = clean
+            tracker = self._observer_autoplay_state.setdefault(
+                session_id,
+                {
+                    "pending_turn": None,
+                    "last_dispatched_at": 0.0,
+                    "last_turn_at": ts,
+                    "auto_turns": 0,
+                    "max_auto_turns": OBSERVER_DEFAULT_MAX_AUTO_TURNS,
+                    "submit_failures": 0,
+                },
+            )
+            tracker["pending_turn"] = int(turn_count)
+            tracker["last_dispatched_at"] = ts
+            tracker["submit_failures"] = 0
+            if count_as_auto:
+                tracker["auto_turns"] = int(tracker.get("auto_turns") or 0) + 1
+
+    def _stop_observer_autoplay_locked(self, session_id: str, note: str) -> None:
+        try:
+            session = copy.deepcopy(self._dialogue_session_locked(session_id))
+        except ValueError:
+            self._observer_autoplay_state.pop(session_id, None)
+            return
+        session["observer_autoplay"] = False
+        session["observer_status_note"] = note
+        self._observer_autoplay_state.pop(session_id, None)
+        self._save_dialogue_locked(session)
+
+    def tick_observer_autoplay(self, host_chat_adapter: Any, *, now: float | None = None) -> list[str]:
+        if host_chat_adapter is None or not host_chat_adapter.available():
+            return []
+        ts = time.monotonic() if now is None else float(now)
+        dispatched: list[str] = []
+        candidates: list[tuple[str, str, int, str, bool]] = []
+
+        with self._lock:
+            if self._closed:
+                return []
+            self._store.reload_if_changed(self._sessions)
+            for sid, sess in list(self._sessions.items()):
+                if (sess.get("status") != "active" or sess.get("mode") != "dialogue"
+                        or sess.get("experience_mode") != "observer"):
+                    self._pending_observer_openings.pop(sid, None)
+                    continue
+                if sess.get("paused") or not sess.get("linked_history_path"):
+                    self._pending_observer_openings.pop(sid, None)
+                    if sess.get("observer_autoplay"):
+                        with dialogue_write_lock(self._data_root):
+                            self._stop_observer_autoplay_locked(sid, "")
+                    continue
+                if not active_dialogue_beat(sess)[1]:
+                    self._pending_observer_openings.pop(sid, None)
+                    if sess.get("observer_autoplay"):
+                        with dialogue_write_lock(self._data_root):
+                            self._stop_observer_autoplay_locked(sid, "当前篇章已落幕，自动观剧已停止")
+                    continue
+                if (self._active_chat_history_path
+                        and self._active_chat_history_path != sess.get("linked_history_path")):
+                    self._pending_observer_openings.pop(sid, None)
+                    if sess.get("observer_autoplay"):
+                        with dialogue_write_lock(self._data_root):
+                            self._stop_observer_autoplay_locked(sid, "检测到已切换对话，自动观剧已停止")
+                    continue
+                if ("host_dialogue", sid) in self._inflight or sid in self._pending_dialogue:
+                    continue
+                turn_count = int(sess.get("turn_count") or 0)
+                if not sess.get("observer_autoplay"):
+                    pending_path = self._pending_observer_openings.get(sid)
+                    if (pending_path and turn_count == 0
+                            and pending_path == sess.get("linked_history_path")
+                            and (not self._active_chat_history_path or self._active_chat_history_path == pending_path)):
+                        tracker = self._observer_autoplay_state.get(sid)
+                        if (tracker is not None and tracker.get("pending_turn") is not None
+                                and ts - float(tracker.get("last_dispatched_at") or 0.0) <= OBSERVER_PENDING_TIMEOUT_SEC):
+                            continue
+                        candidates.append((
+                            sid,
+                            dialogue_stage_cue(sess, is_opening=True),
+                            turn_count,
+                            sess.get("linked_history_path", ""),
+                            True,
+                        ))
+                    elif pending_path is not None:
+                        self._pending_observer_openings.pop(sid, None)
+                    continue
+                tracker = self._observer_autoplay_state.get(sid)
+                if tracker is None:
+                    tracker = {
+                        "pending_turn": None,
+                        "last_dispatched_at": 0.0,
+                        "last_turn_at": ts,
+                        "auto_turns": 0,
+                        "max_auto_turns": OBSERVER_DEFAULT_MAX_AUTO_TURNS,
+                        "submit_failures": 0,
+                    }
+                    self._observer_autoplay_state[sid] = tracker
+                pending = tracker.get("pending_turn")
+                if pending is not None:
+                    if turn_count > int(pending):
+                        tracker["pending_turn"] = None
+                        tracker["submit_failures"] = 0
+                    elif ts - float(tracker.get("last_dispatched_at") or 0.0) > OBSERVER_PENDING_TIMEOUT_SEC:
+                        with dialogue_write_lock(self._data_root):
+                            self._stop_observer_autoplay_locked(sid, "等待回复超时，自动观剧已暂停")
+                        continue
+                    else:
+                        continue
+                raw_max = tracker.get("max_auto_turns")
+                max_turns = OBSERVER_DEFAULT_MAX_AUTO_TURNS if raw_max is None else int(raw_max)
+                if max_turns > 0 and int(tracker.get("auto_turns") or 0) >= max_turns:
+                    with dialogue_write_lock(self._data_root):
+                        self._stop_observer_autoplay_locked(sid, f"已连续自动续演 {max_turns} 轮，可随时继续观剧")
+                    continue
+                interval = _clamp_observer_interval(sess.get("observer_interval_sec"))
+                if ts - float(tracker.get("last_turn_at") or 0.0) < interval:
+                    continue
+                candidates.append((sid, dialogue_stage_cue(sess), turn_count, sess.get("linked_history_path", ""), False))
+
+        for sid, cue, turn_count, linked_path, is_one_shot_opening in candidates:
+            ok = False
+            try:
+                ok = bool(host_chat_adapter.submit_text(cue))
+            except Exception:
+                logger.debug("自动观剧推送续演信号失败：%s", sid, exc_info=True)
+                ok = False
+            if ok:
+                self.mark_observer_cue_dispatched(
+                    sid,
+                    turn_count,
+                    linked_path,
+                    count_as_auto=not is_one_shot_opening,
+                    now=ts,
+                )
+                dispatched.append(sid)
+            elif is_one_shot_opening:
+                with self._lock:
+                    self._pending_observer_openings.pop(sid, None)
+            else:
+                with self._lock:
+                    tracker = self._observer_autoplay_state.get(sid)
+                    if tracker is None or not self._sessions.get(sid, {}).get("observer_autoplay"):
+                        continue
+                    tracker["submit_failures"] = int(tracker.get("submit_failures") or 0) + 1
+                    tracker["last_turn_at"] = ts
+                    if tracker["submit_failures"] < OBSERVER_MAX_SUBMIT_FAILURES:
+                        continue
+                    note = "当前对话连续多次未响应，自动观剧已暂停"
+                    if self._sessions.get(sid, {}).get("observer_autoplay_preferred"):
+                        note += "（重新打开对话后将自动继续）"
+                    with dialogue_write_lock(self._data_root):
+                        self._stop_observer_autoplay_locked(sid, note)
+        return dispatched
 
     def attach_world(
         self,
@@ -922,6 +1784,10 @@ class FateRuntime:
     ) -> dict[str, Any]:
         """在指定命运会话里轻拨一条新的命运丝线（编排期绝不持锁）。"""
         sid = str(session_id or "").strip()
+        if (self.get_session(sid) or {}).get("mode") == "dialogue":
+            return self.pluck_dialogue_thread(
+                sid, theme_compass=theme_compass, prompt_hint=prompt_hint, use_llm=use_llm,
+            )
         with self._lock:
             sess = self._sessions.get(sid)
             if sess is None:
@@ -1020,6 +1886,12 @@ class FateRuntime:
 
     def set_reveal_inner_thoughts(self, session_id: str, reveal: bool) -> dict[str, Any]:
         """切换 Decision 3.A 心路可见开关（默认隐藏，支持随时偷看或收起）。"""
+        if (self.get_session(session_id) or {}).get("mode") == "dialogue":
+            with self._lock, dialogue_write_lock(self._data_root):
+                session = copy.deepcopy(self._dialogue_session_locked(session_id))
+                session["reveal_inner_thoughts"] = bool(reveal)
+                self._save_dialogue_locked(session)
+                return session
         with self._lock:
             sess = self._sessions.get(str(session_id or "").strip())
             if sess is None:
@@ -1619,6 +2491,10 @@ class FateRuntime:
         sync_models: bool = False,
     ) -> dict[str, Any] | None:
         """消费世界事件、同步各角色账本、触发节点抉择并按需滚动编排下一拍（模型期绝不持锁）。"""
+        if (self.get_session(session_id) or {}).get("mode") == "dialogue":
+            return self.advance_dialogue_beat(
+                session_id, force_evaluate=force_evaluate, use_llm=use_llm, sync_models=sync_models,
+            )
         if not self._world.available():
             return self.get_session(session_id)
         sid = str(session_id or "").strip()
@@ -1802,7 +2678,9 @@ class FateRuntime:
 
     def tick_all(self) -> None:
         with self._lock:
-            active_ids = [sid for sid, sess in self._sessions.items() if sess.get("status") == "active"]
+            self._store.reload_if_changed(self._sessions)
+            active_ids = [sid for sid, sess in self._sessions.items()
+                          if sess.get("status") == "active" and sess.get("mode") != "dialogue"]
         for sid in active_ids:
             try:
                 self.tick_session(sid)
@@ -1811,6 +2689,15 @@ class FateRuntime:
 
     def detach_session(self, session_id: str, *, delete_world: bool = False) -> dict[str, Any]:
         """解绑并清理命运会话；常驻挂载模式（attached）严禁删除原小镇。"""
+        if (self.get_session(session_id) or {}).get("mode") == "dialogue":
+            with self._lock, dialogue_write_lock(self._data_root):
+                session = copy.deepcopy(self._dialogue_session_locked(session_id))
+                self._observer_autoplay_state.pop(session_id, None)
+                self._pending_observer_openings.pop(session_id, None)
+                self._bind_dialogue_locked(session, "", "")
+                self._store.delete(session_id)
+                self._sessions.pop(session_id, None)
+                return {"ok": True, "session_id": session_id, "preserved_world": True}
         with self._lock:
             sid = str(session_id or "").strip()
             sess = self._sessions.pop(sid, None)

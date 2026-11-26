@@ -6,297 +6,1842 @@
 <title>七海千秋 · 命运丝线故事引擎</title>
 <style>
   :root {
-    --bg: #151722;
-    --panel: #1f2233;
-    --panel-2: #272b40;
-    --border: #3a405e;
-    --text: #eef1fa;
-    --muted: #9aa4c2;
-    --accent: #f2b8c8;
-    --accent-2: #8ecae6;
-    --ok: #7bd88f;
-    --warn: #ffd166;
-    --err: #ff758f;
+    --bg: #131118;
+    --surface: #1b1824;
+    --surface-2: #231e2e;
+    --surface-3: #2c253a;
+    --inset: #14111c;
+    --line: rgba(255, 255, 255, 0.085);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --text: #f2edf8;
+    --text-soft: #d5cee3;
+    --muted: #9890ab;
+
+    --pink: #ff8fb1;
+    --pink-soft: #ffc0d3;
+    --pink-bg: rgba(255, 143, 177, 0.12);
+    --pink-border: rgba(255, 143, 177, 0.42);
+
+    --sky: #8ad4f5;
+    --sky-bg: rgba(138, 212, 245, 0.11);
+    --sky-border: rgba(138, 212, 245, 0.34);
+
+    --green: #7fd6a5;
+    --green-bg: rgba(127, 214, 165, 0.12);
+    --green-border: rgba(127, 214, 165, 0.36);
+
+    --amber: #f2be6b;
+    --amber-bg: rgba(242, 190, 107, 0.12);
+    --amber-border: rgba(242, 190, 107, 0.38);
+
+    --red: #f48b99;
+    --red-bg: rgba(244, 139, 153, 0.12);
+    --red-border: rgba(244, 139, 153, 0.38);
+
+    --radius-lg: 16px;
+    --radius-md: 12px;
+    --radius-sm: 9px;
+    --ctrl-h: 36px;
+    --shadow-card: 0 12px 32px rgba(5, 4, 10, 0.38);
+    --shadow-modal: 0 24px 64px rgba(4, 3, 8, 0.72);
   }
+
   * { box-sizing: border-box; }
+
   html, body {
     margin: 0;
     padding: 0;
     height: 100%;
-    background: var(--bg);
     color: var(--text);
-    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-    font-size: 13px;
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(960px 500px at 10% -8%, rgba(72, 49, 102, 0.46) 0%, transparent 64%),
+      radial-gradient(760px 440px at 94% -4%, rgba(255, 143, 177, 0.09) 0%, transparent 60%);
+    background-attachment: fixed;
+    font: 13.5px/1.55 "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
+
+  /* 自定义极简滚动条 */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 143, 177, 0.36); }
+
+  .hidden { display: none !important; }
+
   .shell {
     display: flex;
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
   }
+
+  /* 顶部固定毛玻璃栏 */
   .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    flex: 0 0 auto;
+    min-height: 54px;
+    padding: 8px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding: 10px 16px;
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(19, 17, 24, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
   }
+
   .brand {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-weight: 700;
-    font-size: 15px;
-    color: var(--accent);
+    flex-wrap: wrap;
+    min-width: 0;
   }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(145deg, rgba(255, 143, 177, 0.22), rgba(138, 212, 245, 0.1));
+    border: 1px solid var(--pink-border);
+    color: var(--pink-soft);
+    flex: 0 0 auto;
+    box-shadow: 0 0 18px rgba(255, 143, 177, 0.14);
+  }
+
+  .brand-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.35px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .pill {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
+    gap: 6px;
+    padding: 3px 10px;
     border-radius: 999px;
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    font-size: 11px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    font-size: 11.5px;
+    line-height: 1.4;
     color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
-  .pill.ok { color: var(--ok); border-color: rgba(123,216,143,.45); }
-  .pill.warn { color: var(--warn); border-color: rgba(255,209,102,.45); }
-  .pill.err { color: var(--err); border-color: rgba(255,117,143,.45); }
-  .btn {
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    color: var(--text);
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    transition: background .15s, border-color .15s;
-  }
-  .btn:hover:not(:disabled) { border-color: var(--accent-2); background: #30354f; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.primary { background: #b85b7c; border-color: #e686a7; color: #fff; font-weight: 600; }
-  .btn.primary:hover:not(:disabled) { background: #cb698b; }
-  .btn.danger { background: #6b2938; border-color: #b5475f; color: #ffdbe2; }
-  a.btn { text-decoration: none; display: inline-flex; align-items: center; }
-  .btn.sm { padding: 4px 8px; font-size: 11px; }
+  .pill.ok { color: var(--green); border-color: var(--green-border); background: var(--green-bg); }
+  .pill.warn { color: var(--amber); border-color: var(--amber-border); background: var(--amber-bg); }
+  .pill.err { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
+  .pill.pink { color: var(--pink-soft); border-color: var(--pink-border); background: var(--pink-bg); }
+  .pill.sky { color: var(--sky); border-color: var(--sky-border); background: var(--sky-bg); }
 
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex: 0 0 auto;
+  }
+  .status-dot.on {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+  }
+  .status-dot.pink {
+    background: var(--pink);
+    box-shadow: 0 0 8px var(--pink);
+  }
+  .status-dot.warn {
+    background: var(--amber);
+    box-shadow: 0 0 8px var(--amber);
+  }
+
+  /* 主工作区双栏 */
   .workspace {
-    flex: 1;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 1640px;
+    height: calc(100vh - 54px);
+    margin: 0 auto;
+    padding: 16px 20px 20px;
     display: grid;
-    grid-template-columns: 390px 1fr;
-    gap: 12px;
-    padding: 12px;
+    grid-template-columns: minmax(408px, 456px) minmax(0, 1fr);
+    gap: 16px;
     overflow: hidden;
   }
-  @media (max-width: 920px) {
-    .workspace { grid-template-columns: 1fr; overflow: auto; }
+
+  @media (max-width: 1024px) {
+    .workspace {
+      grid-template-columns: minmax(350px, 390px) minmax(0, 1fr);
+      padding: 12px;
+      gap: 12px;
+    }
   }
+
+  @media (max-width: 860px) {
+    html, body { height: auto; min-height: 100%; }
+    .shell { height: auto; min-height: 100vh; overflow: visible; }
+    .workspace {
+      grid-template-columns: 1fr;
+      height: auto;
+      overflow: visible;
+      padding: 12px;
+      gap: 14px;
+    }
+  }
+
   .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, transparent 140px), var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
     display: flex;
     flex-direction: column;
+    min-height: 0;
     overflow: hidden;
   }
+
+  .studio-hd {
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(19, 17, 24, 0.35);
+    flex: 0 0 auto;
+  }
+
+  .mode-switcher {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    background: var(--inset);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+  }
+
+  .mode-tab {
+    position: relative;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  }
+  .mode-tab:hover:not(.active) {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .mode-tab.active {
+    color: var(--text);
+    background: linear-gradient(180deg, rgba(255, 143, 177, 0.14), rgba(255, 143, 177, 0.04)), var(--surface-2);
+    border-color: var(--pink-border);
+    box-shadow: inset 0 2px 0 var(--pink), 0 4px 12px rgba(0, 0, 0, 0.25);
+  }
+
+  .seg-control {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    background: var(--inset);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+  }
+
+  .seg-btn {
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .seg-btn:hover:not(.active) { color: var(--text); }
+  .seg-btn.active {
+    background: var(--surface-3);
+    color: var(--pink-soft);
+    border-color: rgba(255, 143, 177, 0.3);
+  }
+
   .card-hd {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(19, 17, 24, 0.35);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-weight: 600;
-    color: var(--accent-2);
-  }
-  .card-bd {
-    padding: 12px 14px;
-    overflow-y: auto;
-    flex: 1;
-  }
-  .field { margin-bottom: 10px; }
-  .field label {
-    display: block;
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 4px;
-  }
-  .field input[type="text"], .field input[type="number"], .field select, .field textarea {
-    width: 100%;
-    background: #141622;
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 7px 9px;
-    font-size: 12px;
-    font-family: inherit;
-  }
-  .field textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .char-list {
-    display: flex;
+    gap: 10px;
     flex-wrap: wrap;
-    gap: 6px;
-    max-height: 115px;
-    overflow-y: auto;
-    padding: 6px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: #141622;
+    flex: 0 0 auto;
   }
-  .char-chip {
+  .card-hd-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .card-hd-count {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    cursor: pointer;
-    font-size: 11px;
+    justify-content: center;
+    min-width: 22px;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    color: var(--pink-soft);
+    font-size: 11.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
-  .char-chip input { margin: 0; }
-  .tabs { display: flex; gap: 6px; }
-  .tab-btn {
-    padding: 5px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 12px;
+
+  .card-bd {
+    padding: 14px 16px 18px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
   }
-  .tab-btn.active {
-    background: var(--panel-2);
-    color: var(--text);
-    border-color: var(--accent);
+  @media (max-width: 860px) {
+    .card-bd { overflow-y: visible; }
   }
-  .session-item {
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    border-radius: 8px;
-    padding: 12px;
+
+  /* 左侧分节卡片感 */
+  .studio-section {
+    padding: 12px 13px;
     margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.018);
   }
-  .session-hd {
+  .studio-section:last-child { margin-bottom: 0; }
+
+  .section-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 6px;
+    margin: 0 0 10px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--pink-soft);
   }
-  .session-title { font-weight: 700; font-size: 14px; }
-  .session-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .preview-box {
-    border: 1px solid var(--border);
-    background: #141622;
+  .section-title-sub {
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+
+  .target-card {
+    padding: 10px 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: rgba(19, 17, 24, 0.45);
+  }
+
+  .current-chat-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    margin-bottom: 10px;
     border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
+    background: var(--inset);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--text-soft);
+    min-width: 0;
   }
-  .node-card {
-    border-left: 3px solid var(--border);
-    background: #141622;
-    border-radius: 6px;
-    padding: 8px 10px;
-    margin-bottom: 6px;
+  .current-chat-bar span.chat-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .node-card.active { border-left-color: var(--accent); }
-  .node-card.done { border-left-color: var(--ok); }
-  .ledger-grid {
+
+  /* 通用表单控件修复（覆盖所有无 type 的 input / select / textarea） */
+  .field { margin-bottom: 11px; }
+  .field:last-child { margin-bottom: 0; }
+
+  .field > label,
+  .field-label {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select,
+  textarea {
+    width: 100%;
+    background-color: var(--inset);
+    color: var(--text);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.45;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select {
+    height: var(--ctrl-h);
+    padding: 0 11px;
+  }
+
+  textarea {
+    padding: 9px 11px;
+    resize: vertical;
+    min-height: 76px;
+    line-height: 1.55;
+  }
+
+  select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5L6 8L9.5 4.5' stroke='%239890ab' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 11px center;
+    cursor: pointer;
+  }
+
+  select option, select optgroup {
+    background-color: #1b1824;
+    color: #f2edf8;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"])::placeholder,
+  textarea::placeholder {
+    color: rgba(152, 144, 171, 0.58);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover:not(:disabled),
+  select:hover:not(:disabled),
+  textarea:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.28);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--pink);
+    box-shadow: 0 0 0 3px rgba(255, 143, 177, 0.16);
+    background-color: #16131f;
+  }
+
+  input:disabled, select:disabled, textarea:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+  }
+
+  .row2 {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  @media (max-width: 480px) {
+    .row2 { grid-template-columns: 1fr; }
+  }
+
+  /* 按钮系统 */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: var(--ctrl-h);
+    padding: 0 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: rgba(255, 143, 177, 0.55);
+    background: var(--surface-3);
+  }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .btn.sm {
+    height: 30px;
+    padding: 0 11px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
+  .btn.ghost {
+    background: transparent;
+    border-color: var(--line);
+    color: var(--text-soft);
+  }
+  .btn.ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--line-strong);
+    color: var(--text);
+  }
+
+  .btn.accent {
+    background: var(--pink-bg);
+    border-color: var(--pink-border);
+    color: var(--pink-soft);
+    font-weight: 600;
+  }
+  .btn.accent:hover:not(:disabled) {
+    background: rgba(255, 143, 177, 0.2);
+    border-color: var(--pink);
+    color: #fff;
+  }
+
+  .btn.primary {
+    background: linear-gradient(135deg, #d8678f 0%, #9b4b7b 100%);
+    border-color: rgba(255, 180, 204, 0.55);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 6px 18px rgba(216, 103, 143, 0.24);
+  }
+  .btn.primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e4769d 0%, #ac578a 100%);
+    border-color: var(--pink-soft);
+    box-shadow: 0 8px 22px rgba(216, 103, 143, 0.34);
+  }
+
+  .btn.danger {
+    background: transparent;
+    border-color: var(--red-border);
+    color: var(--red);
+  }
+  .btn.warn {
+    background: var(--amber-bg);
+    border-color: var(--amber-border);
+    color: var(--amber);
+    font-weight: 600;
+  }
+  .btn.warn:hover:not(:disabled) {
+    background: rgba(242, 190, 107, 0.22);
+    border-color: var(--amber);
+  }
+  .btn.danger:hover:not(:disabled) {
+    background: var(--red-bg);
+    border-color: var(--red);
+  }
+
+  .btn.full { width: 100%; }
+
+  /* 滑动开关行 */
+  .toggle-list {
+    display: grid;
     gap: 6px;
     margin-top: 8px;
   }
-  .ledger-card {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 7px 9px;
-    background: #141622;
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .toggle-row:hover {
+    border-color: var(--line-strong);
+    background: rgba(255, 255, 255, 0.038);
+  }
+  .toggle-row:has(input:disabled) {
+    opacity: 0.48;
+    cursor: not-allowed;
+  }
+
+  .toggle-label {
+    font-size: 12.5px;
+    color: var(--text-soft);
+    line-height: 1.4;
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-flex;
+    width: 38px;
+    height: 22px;
+    flex: 0 0 auto;
+  }
+  .toggle-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+  }
+  .toggle-track {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--inset);
+    border: 1px solid var(--line-strong);
+    transition: background 0.16s ease, border-color 0.16s ease;
+  }
+  .toggle-track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: transform 0.16s ease, background 0.16s ease;
+  }
+  .toggle-switch input:checked + .toggle-track {
+    background: rgba(255, 143, 177, 0.25);
+    border-color: var(--pink);
+  }
+  .toggle-switch input:checked + .toggle-track::after {
+    transform: translateX(16px);
+    background: var(--pink);
+    box-shadow: 0 0 8px rgba(255, 143, 177, 0.6);
+  }
+  .toggle-switch input:focus-visible + .toggle-track {
+    box-shadow: 0 0 0 3px rgba(255, 143, 177, 0.22);
+  }
+
+  /* 可选角色胶囊 */
+  .char-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    max-height: 132px;
+    overflow-y: auto;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--inset);
+  }
+
+  .char-chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px 5px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    color: var(--text-soft);
+    cursor: pointer;
+    font-size: 12px;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+  .char-chip:hover {
+    border-color: rgba(255, 143, 177, 0.45);
+    color: var(--text);
+  }
+  .char-chip input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+  }
+  .char-check {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--line-strong);
+    background: var(--inset);
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    transition: all 0.15s ease;
+  }
+  .char-check::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+  .char-chip.is-selected,
+  .char-chip:has(input:checked) {
+    border-color: var(--pink-border);
+    background: var(--pink-bg);
+    color: var(--pink-soft);
+    font-weight: 600;
+  }
+  .char-chip.is-selected .char-check,
+  .char-chip:has(input:checked) .char-check {
+    border-color: var(--pink);
+    background: rgba(255, 143, 177, 0.25);
+  }
+  .char-chip.is-selected .char-check::after,
+  .char-chip:has(input:checked) .char-check::after {
+    background: var(--pink);
+  }
+
+  /* 识别出的参与角色胶囊 */
+  .cast-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 26px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .cast-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--sky-border);
+    background: var(--sky-bg);
+    color: var(--sky);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .cast-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(138, 212, 245, 0.22);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+  .cast-empty {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* 提示横幅 */
+  .callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 9px 11px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    line-height: 1.5;
+    margin: 8px 0;
+  }
+  .callout.warn {
+    border: 1px solid var(--amber-border);
+    background: var(--amber-bg);
+    color: var(--amber);
+  }
+  .callout.info {
+    border: 1px solid var(--sky-border);
+    background: var(--sky-bg);
+    color: var(--text-soft);
+    margin-top: 0;
+    margin-bottom: 12px;
+  }
+
+  /* 预设管理条 */
+  .preset-box {
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: rgba(19, 17, 24, 0.45);
+    margin-bottom: 11px;
+  }
+  .preset-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .preset-row select {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 32px;
+    font-size: 12.5px;
+  }
+  .preset-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 7px;
+    flex-wrap: wrap;
+  }
+  .preset-tools .spacer { flex: 1 1 auto; }
+
+  /* 草案编辑区 */
+  .draft-panel {
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--pink-border);
+    background: linear-gradient(180deg, rgba(255, 143, 177, 0.06), transparent 90px), rgba(19, 17, 24, 0.55);
+  }
+  .draft-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--pink-soft);
+  }
+  .dialogue-draft .field { display: block; margin-bottom: 9px; }
+  .dialogue-draft .field:last-child { margin-bottom: 0; }
+  .dialogue-draft .draft-field-label {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .dialogue-role {
+    margin-top: 10px;
+    padding: 10px 11px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--pink);
+    background: var(--surface);
+  }
+  .dialogue-role-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .role-badge {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--pink-bg);
+    border: 1px solid var(--pink-border);
+    color: var(--pink-soft);
     font-size: 11px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+
+  .submit-stack {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .progress-banner {
+    padding: 8px 11px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--sky-border);
+    background: var(--sky-bg);
+    color: var(--sky);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .progress-banner:empty { display: none; }
+
+  .observer-box,
+  .bg-studio-box {
+    margin-top: 9px;
+    padding: 10px 11px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--pink-border);
+    background: linear-gradient(180deg, rgba(255, 143, 177, 0.08), rgba(19, 17, 24, 0.45));
+    display: grid;
+    gap: 9px;
+  }
+  .bg-studio-box {
+    border-color: var(--sky-border);
+    background: linear-gradient(180deg, rgba(138, 212, 245, 0.07), rgba(19, 17, 24, 0.45));
+  }
+
+  .scene-picker-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .scene-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 7px;
+    max-height: 224px;
+    overflow-y: auto;
+    padding: 7px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: rgba(13, 11, 18, 0.72);
+  }
+  .scene-card {
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+    color: var(--text-soft);
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+  .scene-card:hover {
+    border-color: var(--sky-border);
+    background: var(--surface-2);
+    transform: translateY(-1px);
+  }
+  .scene-card.active {
+    border-color: var(--pink);
+    background: var(--surface-3);
+    box-shadow: 0 0 0 2px rgba(255, 143, 177, 0.24);
+  }
+  .scene-thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(135deg, rgba(138, 212, 245, 0.12), rgba(255, 143, 177, 0.1));
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .scene-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .scene-idx-badge {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(13, 11, 18, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .scene-card.active .scene-idx-badge {
+    border-color: var(--pink-border);
+    background: rgba(58, 28, 46, 0.9);
+    color: var(--pink-soft);
+  }
+  .scene-label {
+    padding: 5px 7px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--text-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .scene-card.active .scene-label {
+    color: var(--pink-soft);
+    font-weight: 600;
+  }
+
+  .dialogue-hint { color: var(--muted); font-size: 12px; margin: 5px 0; }
+  .dialogue-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+
+  /* 右栏：空状态与会话卡片 */
+  .empty-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 320px;
+    padding: 36px 24px;
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius-md);
+    background: radial-gradient(360px 180px at 50% 42%, rgba(255, 143, 177, 0.06), transparent 72%);
+  }
+  .empty-stage-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 14px;
+    background: var(--pink-bg);
+    border: 1px solid var(--pink-border);
+    color: var(--pink-soft);
+  }
+  .empty-stage h3 {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .empty-stage p {
+    margin: 0;
+    max-width: 380px;
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+
+  .session-item {
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.022) 0%, transparent 110px), var(--surface-2);
+    border-radius: var(--radius-md);
+    padding: 15px 16px;
+    margin-bottom: 14px;
+    transition: border-color 0.16s ease;
+  }
+  .session-item:hover { border-color: var(--line-strong); }
+  .session-item:last-child { margin-bottom: 0; }
+
+  .session-hd {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .session-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .session-title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text);
+    letter-spacing: 0.2px;
+  }
+
+  .phase-box {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+    flex: 0 0 auto;
+  }
+  .tension-bar {
+    width: 132px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--inset);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .tension-bar > i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--pink) 0%, var(--amber) 100%);
+    transition: width 0.25s ease;
+  }
+
+  .meta-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .whisper-banner {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 11px;
+    margin-bottom: 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--pink-border);
+    background: var(--pink-bg);
+    font-size: 12.5px;
+    color: var(--text-soft);
+  }
+  .whisper-tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--pink-soft);
+    white-space: nowrap;
+  }
+
+  .thread-premise {
+    padding: 10px 12px;
+    margin: 8px 0 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: var(--inset);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-soft);
+  }
+  .thread-premise strong { color: var(--pink-soft); }
+
+  /* 节拍时间轴 */
+  .timeline {
+    position: relative;
+    padding-left: 18px;
+    display: grid;
+    gap: 10px;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: linear-gradient(180deg, rgba(255, 143, 177, 0.4), rgba(127, 214, 165, 0.22));
+    border-radius: 2px;
+  }
+
+  .node-card {
+    position: relative;
+    padding: 11px 13px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: var(--inset);
+  }
+  .node-card::before {
+    content: "";
+    position: absolute;
+    left: -17px;
+    top: 15px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface-3);
+    border: 2px solid var(--muted);
+  }
+  .node-card.active {
+    border-color: var(--pink-border);
+    background: linear-gradient(180deg, rgba(255, 143, 177, 0.05), transparent 80px), var(--inset);
+  }
+  .node-card.active::before {
+    border-color: var(--pink);
+    background: var(--pink);
+    box-shadow: 0 0 10px var(--pink);
+  }
+  .node-card.done::before {
+    border-color: var(--green);
+    background: var(--green);
+  }
+
+  .node-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 5px;
+  }
+  .node-step {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    color: var(--sky);
+  }
+  .node-card.active .node-step {
+    color: var(--pink-soft);
+    border-color: var(--pink-border);
+    background: var(--pink-bg);
+  }
+  .node-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .node-loc {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .node-situation {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-soft);
+  }
+  .node-dilemma {
+    margin-top: 7px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--amber-border);
+    background: rgba(242, 190, 107, 0.07);
+    font-size: 12px;
+    color: var(--amber);
     line-height: 1.5;
   }
-  .check-line { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
-  .hidden { display: none !important; }
+  .node-stance {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--pink-soft);
+  }
+
+  .fact-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 7px;
+  }
+  .fact-chip {
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+
+  .choice-list {
+    display: grid;
+    gap: 6px;
+    margin-top: 9px;
+  }
+  .choice-item {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.025);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .choice-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 3px;
+  }
+  .choice-actor { font-weight: 700; color: var(--text); }
+  .stance-tag {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    border: 1px solid var(--pink-border);
+    background: var(--pink-bg);
+    color: var(--pink-soft);
+  }
+  .choice-summary { color: var(--text-soft); }
+  .thought-box {
+    margin-top: 6px;
+    padding: 6px 9px;
+    border-radius: 6px;
+    border-left: 2px solid var(--sky);
+    background: rgba(138, 212, 245, 0.07);
+    color: var(--sky);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  .thought-hidden {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-style: italic;
+  }
+  .outcome-line {
+    margin-top: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--green-border);
+    background: var(--green-bg);
+    color: var(--green);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .epilogue-card {
+    margin-top: 10px;
+    padding: 11px 13px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--amber-border);
+    background: linear-gradient(160deg, rgba(242, 190, 107, 0.09), rgba(20, 17, 28, 0.7));
+  }
+  .epilogue-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--amber);
+    margin-bottom: 4px;
+  }
+  .epilogue-card-body {
+    font-size: 12px;
+    color: var(--text-soft);
+    line-height: 1.6;
+  }
+
+  /* 角色记事折叠区 */
+  .ledger-section {
+    margin-top: 12px;
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+  .ledger-summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    user-select: none;
+  }
+  .ledger-summary::-webkit-details-marker { display: none; }
+  .ledger-summary:hover { color: var(--text); }
+  .ledger-summary::after {
+    content: "▾";
+    font-size: 12px;
+    transition: transform 0.15s ease;
+  }
+  .ledger-section:not([open]) .ledger-summary::after { transform: rotate(-90deg); }
+
+  .ledger-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .ledger-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 9px 11px;
+    background: var(--inset);
+    font-size: 11.5px;
+    line-height: 1.55;
+  }
+  .ledger-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .ledger-row { color: var(--muted); margin-top: 3px; }
+  .ledger-row b { color: var(--text-soft); font-weight: 600; }
+  .ledger-row.asp { color: var(--pink-soft); }
+  .ledger-row.prom { color: var(--sky); }
+
+  /* 卡片底部操作栏分级 */
+  .session-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+  .actions-main, .actions-util {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Toast & Modal */
   .toast {
     position: fixed;
-    right: 16px;
-    bottom: 16px;
+    right: 20px;
+    bottom: 20px;
     z-index: 60;
-    padding: 9px 14px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: #23273d;
+    padding: 10px 15px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--line-strong);
+    background: rgba(35, 30, 46, 0.96);
+    backdrop-filter: blur(8px);
     color: var(--text);
-    box-shadow: 0 8px 24px rgba(0,0,0,.45);
-    max-width: 420px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.52);
+    max-width: min(420px, calc(100vw - 32px));
+    font-size: 12.5px;
   }
-  .toast.err { border-color: var(--err); color: #ffd4dc; background: #3d1d29; }
+  .toast.err {
+    border-color: var(--red-border);
+    background: rgba(52, 24, 34, 0.96);
+    color: #ffdbe2;
+  }
+
   .modal-mask {
     position: fixed;
     inset: 0;
     z-index: 50;
-    background: rgba(10,12,18,.72);
+    background: rgba(8, 7, 13, 0.72);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 16px;
   }
   .modal {
-    width: min(620px, 100%);
+    width: min(560px, 100%);
     max-height: 86vh;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-modal);
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
   .modal-hd {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    font-size: 14.5px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--pink-soft);
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  .modal-bd { padding: 14px 16px; overflow-y: auto; line-height: 1.6; }
-  .modal-ft { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .modal-bd {
+    padding: 16px 18px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .modal-ft {
+    padding: 12px 18px;
+    border-top: 1px solid var(--line);
+    background: rgba(19, 17, 24, 0.35);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
 </style>
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
     <div class="brand">
-      <span>🧵 七海千秋 · 命运丝线故事引擎</span>
-      <span class="pill" id="world-status-pill">检测世界引擎中…</span>
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3c4.97 0 9 3.13 9 7 0 2.58-1.8 4.83-4.5 6.04L17 21l-4.2-2.2c-.26.02-.53.03-.8.03-4.97 0-9-3.13-9-7s4.03-8.83 9-8.83z" />
+          <path d="M8.5 11.5c1.5-1.5 5.5-1.5 7 0" />
+        </svg>
+      </div>
+      <h1 class="brand-title">命运丝线 · 故事引擎</h1>
+      <span class="pill ok" id="dialogue-status-pill"><span class="status-dot on"></span>对话剧本就绪</span>
+      <span class="pill hidden" id="world-status-pill"></span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <button class="btn sm" id="btn-refresh">↻ 刷新大厅</button>
+    <div class="topbar-actions">
+      <button class="btn sm ghost" id="btn-refresh">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        刷新大厅
+      </button>
     </div>
   </header>
 
   <main class="workspace">
-    <!-- 左栏：开启命运丝线故事 -->
+    <!-- 左栏：编织台 -->
     <section class="card">
-      <div class="card-hd">
-        <span>✨ 拨动命运丝线</span>
-        <div class="tabs">
-          <button class="tab-btn active" id="mode-new-btn">🏡 新建故事</button>
-          <button class="tab-btn" id="mode-attach-btn">🧵 挂载小镇</button>
+      <div class="studio-hd">
+        <div class="mode-switcher" role="tablist" aria-label="引擎模式">
+          <button class="mode-tab active" id="mode-dialogue-btn" type="button">对话剧本</button>
+          <button class="mode-tab" id="mode-new-btn" type="button">新建小镇</button>
+          <button class="mode-tab" id="mode-attach-btn" type="button">挂载小镇</button>
+        </div>
+      </div>
+
+      <!-- 模式 C：对话剧本注入与独立开局 -->
+      <div class="card-bd" id="panel-mode-dialogue">
+        <div class="studio-section">
+          <div class="section-title">
+            <span>入口与目标</span>
+            <span class="section-title-sub">无需文字世界</span>
+          </div>
+          <div class="seg-control" aria-label="对话剧本模式">
+            <button class="seg-btn active" id="dialogue-inject-btn" type="button">注入已有对话</button>
+            <button class="seg-btn" id="dialogue-new-btn" type="button">新建剧本对话</button>
+          </div>
+
+          <div id="dialogue-inject-panel" class="target-card">
+            <div class="current-chat-bar" id="dialogue-current">
+              <span class="status-dot"></span>
+              <span class="chat-name">正在检测运行中的对话…</span>
+            </div>
+            <div class="field">
+              <label for="dialogue-target">目标对话</label>
+              <select id="dialogue-target"><option value="">正在读取对话…</option></select>
+            </div>
+            <div class="cast-row" id="dialogue-cast"></div>
+            <div class="callout warn hidden" id="dialogue-native-warning">此对话正在使用 Shinsekai 原生剧本，请选择普通对话以保持兼容。</div>
+            <div class="toggle-list">
+              <label class="toggle-row">
+                <span class="toggle-label">读取当前对话最近几轮自然切入</span>
+                <span class="toggle-switch">
+                  <input type="checkbox" id="dialogue-recent" />
+                  <span class="toggle-track"></span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div id="dialogue-new-panel" class="target-card hidden">
+            <div class="field">
+              <label>出场角色</label>
+              <div class="char-list" id="dialogue-characters"></div>
+            </div>
+            <div class="toggle-list">
+              <label class="toggle-row">
+                <span class="toggle-label">允许少量旁白</span>
+                <span class="toggle-switch">
+                  <input type="checkbox" id="dialogue-narration" />
+                  <span class="toggle-track"></span>
+                </span>
+              </label>
+              <label class="toggle-row">
+                <span class="toggle-label">启动后让角色主动开场</span>
+                <span class="toggle-switch">
+                  <input type="checkbox" id="dialogue-opening" />
+                  <span class="toggle-track"></span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:10px;margin-bottom:0;">
+            <label for="dialogue-experience-mode">体验模式</label>
+            <select id="dialogue-experience-mode">
+              <option value="co_play">共同参与（你作为在场角色对话）</option>
+              <option value="observer">纯观剧模式（角色自主演绎，观众静默看戏）</option>
+            </select>
+          </div>
+
+          <label class="toggle-row">
+            <span class="toggle-label">开启对话大脑-嘴巴双层解耦（贴近人格声线、大幅减少 AI 味）</span>
+            <span class="toggle-switch">
+              <input type="checkbox" id="dialogue-mouth-decoupling" checked disabled />
+              <span class="toggle-track"></span>
+            </span>
+          </label>
+
+          <div class="observer-box hidden" id="dialogue-observer-box">
+            <div class="dialogue-hint hidden" id="dialogue-observer-cast-hint" style="margin:0;color:var(--pink-soft);">
+              当前仅选了 1 位角色，将进入「独角戏」观剧；选择 2 位及以上角色可观看多角对手戏。
+            </div>
+            <label class="toggle-row" style="margin:0;">
+              <span class="toggle-label">开启自动连续观剧（持续演至篇章落幕，关闭弹层后仍会继续）</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="dialogue-observer-autoplay" />
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+            <div class="field" style="margin:0;">
+              <label for="dialogue-observer-interval">自动续演间隔</label>
+              <select id="dialogue-observer-interval">
+                <option value="4">4 秒 · 紧凑节奏</option>
+                <option value="8" selected>8 秒 · 适中节奏</option>
+                <option value="15">15 秒 · 配合语音慢赏</option>
+                <option value="25">25 秒 · 长对白细读</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="studio-section">
+          <div class="section-title">
+            <span>对话背景</span>
+            <span class="section-title-sub">可选内置场景组</span>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="dialogue-bg-mode">背景来源</label>
+            <select id="dialogue-bg-mode">
+              <option value="custom">自由设定场景（按剧本大纲描述）</option>
+              <option value="shinsekai">使用 Shinsekai 自带背景（内置场景与画面联动）</option>
+            </select>
+          </div>
+          <div class="bg-studio-box hidden" id="dialogue-bg-box">
+            <div class="field" style="margin:0;">
+              <label for="dialogue-background">Shinsekai 内置背景组</label>
+              <select id="dialogue-background"><option value="">选择内置背景组…</option></select>
+            </div>
+            <div class="callout info hidden" id="dialogue-bg-inject-hint" style="margin:0;"></div>
+            <div>
+              <div class="scene-picker-head" style="margin-bottom:5px;">
+                <span>开场场景</span>
+                <span id="dialogue-scene-picked" style="color:var(--pink-soft);">自动匹配</span>
+              </div>
+              <div class="scene-picker" id="dialogue-scene-picker"></div>
+            </div>
+            <label class="toggle-row" style="margin:0;">
+              <span class="toggle-label">允许随剧情推进自动切换同组内置场景</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="dialogue-allow-scene-transitions" checked />
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="studio-section">
+          <div class="section-title">
+            <span>剧本设定与预设</span>
+          </div>
+          <div class="preset-box">
+            <div class="preset-row">
+              <select id="dialogue-preset" aria-label="剧本预设"><option value="">选择剧本预设…</option></select>
+              <button class="btn sm" id="dialogue-preset-load" type="button">加载</button>
+              <button class="btn sm accent" id="dialogue-preset-save" type="button">保存</button>
+            </div>
+            <div class="preset-tools">
+              <button class="btn sm ghost" id="dialogue-preset-import" type="button">导入 JSON</button>
+              <button class="btn sm ghost" id="dialogue-preset-export" type="button">导出 JSON</button>
+              <span class="spacer"></span>
+              <button class="btn sm danger" id="dialogue-preset-delete" type="button">删除预设</button>
+              <input class="hidden" type="file" id="dialogue-preset-file" accept=".json,application/json" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="dialogue-title">剧本标题</label>
+            <input type="text" id="dialogue-title" maxlength="56" placeholder="例如：最后一班列车" />
+          </div>
+
+          <div class="row2">
+            <div class="field">
+              <label for="dialogue-theme">基调罗盘</label>
+              <select id="dialogue-theme">
+                <option value="auto">自动</option>
+                <option value="daily_aspiration">日常微光</option>
+                <option value="bond_turning">羁绊转折</option>
+                <option value="mystery_ripple">谜团涟漪</option>
+                <option value="crisis_test">风波考验</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="dialogue-pacing">每章拍数</label>
+              <select id="dialogue-pacing"><option value="0">随剧情收束</option></select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="dialogue-outline">自定义剧本 / 大纲</label>
+            <textarea id="dialogue-outline" rows="5" maxlength="12000" placeholder="写下场景、冲突、角色关系张力，以及期待展开的方向…"></textarea>
+          </div>
+        </div>
+
+        <div class="studio-section">
+          <div class="section-title">
+            <span>开局精修与启动</span>
+          </div>
+          <button class="btn accent full" id="dialogue-preview" type="button">预览并精修开局草案</button>
+          <div class="draft-panel dialogue-draft hidden" id="dialogue-draft"></div>
+          <div class="submit-stack">
+            <button class="btn primary full" id="dialogue-submit" type="button">注入到当前对话（免重启立即生效）</button>
+            <button class="btn accent full hidden" id="dialogue-cue" type="button">推入开场引子</button>
+            <div class="progress-banner" role="status" id="dialogue-progress"></div>
+          </div>
         </div>
       </div>
 
       <!-- 模式 A：新建独立命运故事小镇 -->
-      <div class="card-bd" id="panel-mode-new">
-        <div class="row2">
+      <div class="card-bd hidden" id="panel-mode-new">
+        <div class="studio-section">
+          <div class="section-title"><span>世界基调与空间</span></div>
+          <div class="row2">
+            <div class="field">
+              <label>丝线基调罗盘</label>
+              <select id="cfg-theme">
+                <option value="auto">随在场角色性情生发</option>
+                <option value="daily_aspiration">日常微光 · 心愿萌芽</option>
+                <option value="bond_turning">羁绊转折 · 心照不宣</option>
+                <option value="mystery_ripple">谜团涟漪 · 寻迹探幽</option>
+                <option value="crisis_test">风波考验 · 抉择时刻</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>体验模式</label>
+              <select id="cfg-mode">
+                <option value="co_play">自然融入（自由交互影响走向）</option>
+                <option value="observer">纯观剧见证（全员自主抉择推进）</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row2">
+            <div class="field">
+              <label>舞台空间形态</label>
+              <select id="cfg-world-mode">
+                <option value="town">立体小镇（多层建筑 + 密闭隔间）</option>
+                <option value="compound">室内建筑群（公馆 / 学院 / 旅馆）</option>
+                <option value="room">室内聚焦（单层多房空间）</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>命运推进节奏</label>
+              <select id="cfg-max-nodes">
+                <option value="0" selected>自由持续演进（自然推进至终章）</option>
+                <option value="4">精炼短篇（约 4 幕内收束）</option>
+                <option value="8">中篇展开（约 8 幕内收束）</option>
+                <option value="16">长篇连载（最多 16 幕）</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row2">
+            <div class="field">
+              <label>故事标题（可留空）</label>
+              <input type="text" id="cfg-title" placeholder="例如：雨夜二楼的未完心愿" />
+            </div>
+            <div class="field">
+              <label>玩家称呼（观剧模式跳过）</label>
+              <input type="text" id="cfg-player-name" value="旅人" />
+            </div>
+          </div>
+
+          <div class="row2">
+            <div class="field" id="cfg-bldg-wrap">
+              <label>建筑数量（3–8）</label>
+              <input type="number" id="cfg-building-count" min="3" max="8" value="5" />
+            </div>
+            <div class="field">
+              <label>原生性格居民数量（0–4）</label>
+              <input type="number" id="cfg-native-count" min="0" max="4" value="2" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label>舞台环境描述（可选）</label>
+            <input type="text" id="cfg-world-prompt" placeholder="例如：带二楼窗景房间和地下室的静谧汤宿小镇" />
+          </div>
+        </div>
+
+        <div class="studio-section">
+          <div class="section-title">
+            <span>角色与情感传承</span>
+            <a id="story-char-mgr-link" href="#" target="_blank" rel="noopener noreferrer" style="font-size:11.5px;color:var(--sky);text-decoration:none;font-weight:500;">打开角色管理 ↗</a>
+          </div>
+          <div class="field">
+            <label>导入宿主角色（零剧透自主抉择）</label>
+            <div class="char-list" id="cfg-chars"></div>
+          </div>
+
+          <div class="field">
+            <label>初始情感指针与皮肤（继承自文字世界）</label>
+            <select id="cfg-relation-source">
+              <option value="auto">自动继承文字世界设定（优先默认初始关系）</option>
+              <option value="__default__">仅使用角色管理「默认初始关系」</option>
+              <option value="story_fresh">不继承文字世界关系（按故事默认：同行旅伴）</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="studio-section">
+          <div class="section-title"><span>开场契机与编织</span></div>
+          <div class="field">
+            <label>初始意象 / 命运契机提示（不预先写死结局）</label>
+            <textarea id="cfg-outline" placeholder="例如：二楼角落出现一本画着聚会草图的旧手札、或者一场骤雨把大家困在了同一栋木屋里…"></textarea>
+          </div>
+
+          <div class="toggle-list" style="margin-bottom:12px;">
+            <label class="toggle-row">
+              <span class="toggle-label">使用大模型实时编织节点与角色自主选择</span>
+              <span class="toggle-switch">
+                <input type="checkbox" id="cfg-use-llm" checked />
+                <span class="toggle-track"></span>
+              </span>
+            </label>
+          </div>
+
+          <button class="btn primary full" id="btn-create-fate" type="button">创建故事并拨动命运丝线</button>
+        </div>
+      </div>
+
+      <!-- 模式 B：直接挂载到已有常驻小镇 -->
+      <div class="card-bd hidden" id="panel-mode-attach">
+        <div class="studio-section">
+          <div class="section-title"><span>常驻小镇挂载</span></div>
+          <div class="callout info">
+            直接附着到已建好的活态小镇，保留全部建筑、居民与日常记忆，随时从当前位置轻拨一根命运丝线。
+          </div>
+          <div class="field">
+            <label>选择现有小镇</label>
+            <select id="attach-realm-select"></select>
+          </div>
           <div class="field">
             <label>丝线基调罗盘</label>
-            <select id="cfg-theme">
+            <select id="attach-theme">
               <option value="auto">随在场角色性情生发</option>
               <option value="daily_aspiration">日常微光 · 心愿萌芽</option>
               <option value="bond_turning">羁绊转折 · 心照不宣</option>
@@ -305,125 +1850,22 @@
             </select>
           </div>
           <div class="field">
-            <label>体验模式</label>
-            <select id="cfg-mode">
-              <option value="co_play">自然融入（玩家自由交互影响走向）</option>
-              <option value="observer">纯观剧见证（全员自主抉择推进）</option>
-            </select>
+            <label>契机提示（可选）</label>
+            <textarea id="attach-hint" placeholder="例如：今晚旅馆二楼忽然传来熟悉的琴声…"></textarea>
           </div>
+          <button class="btn primary full" id="btn-attach-fate" type="button" style="margin-top:8px;">挂载小镇并拨动丝线</button>
         </div>
-
-        <div class="row2">
-          <div class="field">
-            <label>舞台空间形态</label>
-            <select id="cfg-world-mode">
-              <option value="town">立体小镇（多层建筑 + 密闭隔间）</option>
-              <option value="compound">室内建筑群（公馆 / 学院 / 旅馆）</option>
-              <option value="room">室内聚焦（单层多房空间）</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>命运推进节奏</label>
-            <select id="cfg-max-nodes">
-              <option value="0" selected>自由持续演进（随主角抉择自然推进至终章）</option>
-              <option value="4">精炼短篇（约 4 幕内自然收束）</option>
-              <option value="8">中篇展开（约 8 幕内自然收束）</option>
-              <option value="16">长篇连载（最多 16 幕）</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row2">
-          <div class="field">
-            <label>故事标题（可留空由丝线生发）</label>
-            <input type="text" id="cfg-title" placeholder="例如：雨夜二楼的未完心愿" />
-          </div>
-          <div class="field">
-            <label>玩家称呼（观剧模式自动跳过）</label>
-            <input type="text" id="cfg-player-name" value="旅人" />
-          </div>
-        </div>
-
-        <div class="row2">
-          <div class="field" id="cfg-bldg-wrap">
-            <label>建筑数量（3–8）</label>
-            <input type="number" id="cfg-building-count" min="3" max="8" value="5" />
-          </div>
-          <div class="field">
-            <label>原生性格居民数量（0–4）</label>
-            <input type="number" id="cfg-native-count" min="0" max="4" value="2" />
-          </div>
-        </div>
-
-        <div class="field">
-          <label>舞台环境描述（可选）</label>
-          <input type="text" id="cfg-world-prompt" placeholder="例如：带二楼窗景房间和地下室的静谧汤宿小镇" />
-        </div>
-
-        <div class="field">
-          <label>导入宿主角色（按各自人格自主做决定，零剧透零操纵）</label>
-          <div class="char-list" id="cfg-chars"></div>
-        </div>
-
-        <div class="field">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
-            <label style="margin-bottom:0;">初始情感指针与皮肤（继承自文字世界角色管理）</label>
-            <a id="story-char-mgr-link" href="#" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--accent-2);text-decoration:none;">🎭 打开角色管理</a>
-          </div>
-          <select id="cfg-relation-source">
-            <option value="auto">自动继承文字世界设定（优先默认初始关系，其次各世界已设关系）</option>
-            <option value="__default__">仅使用角色管理「默认初始关系」</option>
-            <option value="story_fresh">不继承文字世界关系（按故事默认：同行旅伴）</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>初始意象 / 命运契机提示（仅投放开场节点，不预先写死结局）</label>
-          <textarea id="cfg-outline" placeholder="例如：二楼角落出现一本画着聚会草图的旧手札、或者一场骤雨把大家困在了同一栋木屋里…"></textarea>
-        </div>
-
-        <div class="field">
-          <label class="check-line">
-            <input type="checkbox" id="cfg-use-llm" checked />
-            <span>使用大模型实时编织节点与角色自主选择</span>
-          </label>
-        </div>
-
-        <button class="btn primary" id="btn-create-fate" style="width:100%;margin-top:6px;">✨ 创建故事并拨动命运丝线</button>
-      </div>
-
-      <!-- 模式 B：直接挂载到已有常驻小镇 -->
-      <div class="card-bd hidden" id="panel-mode-attach">
-        <div class="preview-box" style="font-size:12px;color:var(--muted);">
-          直接附着到你已经建好的活态小镇，保留所有建筑、居民与日常记忆，随时从当前位置轻拨一根命运丝线。
-        </div>
-        <div class="field">
-          <label>选择现有小镇</label>
-          <select id="attach-realm-select"></select>
-        </div>
-        <div class="field">
-          <label>丝线基调罗盘</label>
-          <select id="attach-theme">
-            <option value="auto">随在场角色性情生发</option>
-            <option value="daily_aspiration">日常微光 · 心愿萌芽</option>
-            <option value="bond_turning">羁绊转折 · 心照不宣</option>
-            <option value="mystery_ripple">谜团涟漪 · 寻迹探幽</option>
-            <option value="crisis_test">风波考验 · 抉择时刻</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>契机提示（可选）</label>
-          <textarea id="attach-hint" placeholder="例如：今晚旅馆二楼忽然传来熟悉的琴声…"></textarea>
-        </div>
-        <button class="btn primary" id="btn-attach-fate" style="width:100%;margin-top:6px;">🧵 挂载小镇并拨动丝线</button>
       </div>
     </section>
 
     <!-- 右栏：命运丝线轨迹与全角色个人编年史 -->
     <section class="card">
       <div class="card-hd">
-        <span>📜 命运丝线轨迹与全角色记事志 (<span id="sessions-count">0</span>)</span>
-        <span class="pill ok">节点自主抉择 · 滚动因果编排</span>
+        <div class="card-hd-title">
+          <span>命运丝线轨迹与全角色记事志</span>
+          <span class="card-hd-count" id="sessions-count">0</span>
+        </div>
+        <span class="pill pink">节点自主抉择 · 滚动因果编排</span>
       </div>
       <div class="card-bd" id="pane-sessions"></div>
     </section>
@@ -434,7 +1876,7 @@
   <div class="modal">
     <div class="modal-hd">
       <span id="modal-title">提示</span>
-      <button class="btn sm" id="modal-close-x">✕</button>
+      <button class="btn sm ghost" id="modal-close-x" type="button" aria-label="关闭">✕</button>
     </div>
     <div class="modal-bd" id="modal-body"></div>
     <div class="modal-ft" id="modal-footer"></div>
@@ -453,8 +1895,22 @@ const state = {
   charactersKey: "",
   realms: [],
   sessions: [],
-  leftMode: "new",
+  leftMode: "dialogue",
   pollTimer: null,
+  dialogueMode: "inject",
+  dialogueMouthRevision: 0,
+  currentChat: null,
+  conversations: [],
+  conversationsLoaded: false,
+  dialogueCharacters: new Set(),
+  dialogueCharactersKey: "",
+  hostCharacterNames: null,
+  dialogueDraft: null,
+  dialoguePresets: [],
+  chatBindings: {},
+  backgrounds: [],
+  dialogueSceneIndex: 0,
+  targetBgCache: {},
 };
 
 let sessionsRevision = 0;
@@ -472,7 +1928,7 @@ function getBridgeToken() {
 
 function withToken(url) {
   if (!state.token) return url;
-  return url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(state.token);
+  return url + (url.includes("?") ? "&" : "?") + "shinsekai_bridge_token=" + encodeURIComponent(state.token);
 }
 
 let _toastTimer = null;
@@ -494,7 +1950,7 @@ async function runAction(actionId, values = {}) {
     method: "POST",
     credentials: "same-origin",
     cache: "no-store",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Shinsekai-Bridge-Token": state.token },
     body: JSON.stringify({ values: values || {} }),
   });
   let data = null;
@@ -517,10 +1973,11 @@ function showModal(title, bodyHtml, buttons = []) {
   el("modal-body").innerHTML = bodyHtml || "";
   const ft = el("modal-footer");
   ft.innerHTML = "";
-  const list = buttons.length ? buttons : [{ label: "关闭", cls: "", onClick: closeModal }];
+  const list = buttons.length ? buttons : [{ label: "关闭", cls: "ghost", onClick: closeModal }];
   for (const b of list) {
     const btn = document.createElement("button");
-    btn.className = "btn " + (b.cls || "");
+    btn.type = "button";
+    btn.className = "btn " + (b.cls || "ghost");
     btn.textContent = b.label || "确定";
     btn.onclick = () => b.onClick && b.onClick(btn);
     ft.appendChild(btn);
@@ -528,16 +1985,16 @@ function showModal(title, bodyHtml, buttons = []) {
   el("modal-mask").classList.remove("hidden");
 }
 
-function openConfirm(title, message, onConfirm) {
-  showModal(title, '<div style="font-size:13px;">' + esc(message) + "</div>", [
-    { label: "取消", cls: "", onClick: closeModal },
+function openConfirmation(title, message, onAccepted) {
+  showModal(title, '<div style="font-size:13px;color:var(--text-soft);">' + esc(message) + "</div>", [
+    { label: "取消", cls: "ghost", onClick: closeModal },
     {
       label: "确认",
       cls: "danger",
       onClick: async (btn) => {
         btn.disabled = true;
         try {
-          await onConfirm();
+          await onAccepted();
           closeModal();
         } catch (e) {
           toast(e.message, true);
@@ -553,8 +2010,748 @@ function switchLeftMode(mode) {
   state.leftMode = mode;
   el("mode-new-btn").classList.toggle("active", mode === "new");
   el("mode-attach-btn").classList.toggle("active", mode === "attach");
+  el("mode-dialogue-btn").classList.toggle("active", mode === "dialogue");
   el("panel-mode-new").classList.toggle("hidden", mode !== "new");
   el("panel-mode-attach").classList.toggle("hidden", mode !== "attach");
+  el("panel-mode-dialogue").classList.toggle("hidden", mode !== "dialogue");
+}
+
+async function hostRequest(path, body) {
+  const resp = await fetch(withToken(path), {
+    credentials: "same-origin", cache: "no-store",
+    method: body === undefined ? "GET" : "POST",
+    headers: { "Content-Type": "application/json", "X-Shinsekai-Bridge-Token": state.token },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data?.error?.message || data?.error || data?.message || "Shinsekai 请求失败");
+  return data;
+}
+
+function historyKey(path) {
+  return String(path || "").replace(/\\/g, "/").replace(/\/(active|branches)\.json$/, "")
+    .replace(/\.json$/i, "").replace(/\/$/, "").toLowerCase();
+}
+
+function sameHistory(first, second) {
+  const a = historyKey(first);
+  const b = historyKey(second);
+  return Boolean(a && b && (a === b || (!a.includes(":") && !a.startsWith("/") && b.endsWith("/" + a))
+    || (!b.includes(":") && !b.startsWith("/") && a.endsWith("/" + b))));
+}
+
+function chatIsRunning(status) {
+  return Boolean(status?.chatProcessRunning || status?.running || (status?.state && status.state !== "idle"));
+}
+
+function selectedChat() {
+  return state.conversations.find((row) => row.historyPath === el("dialogue-target").value);
+}
+
+function currentBinding() {
+  return Object.values(state.chatBindings).find((row) => sameHistory(row.history_path, state.currentChat?.historyPath));
+}
+
+function clearDialogueDraft() {
+  state.dialogueDraft = null;
+  renderDialogueDraft();
+}
+
+function selectedBgGroup(name) {
+  const key = String(name || "").trim().toLowerCase();
+  return state.backgrounds.find((bg) => bg.name.toLowerCase() === key) || null;
+}
+
+function parseTagLineLabel(line) {
+  const idx = [line.indexOf("："), line.indexOf(":")].filter((n) => n >= 0).sort((a, b) => a - b)[0];
+  return idx !== undefined ? line.slice(idx + 1).trim() : line.trim();
+}
+
+function normalizeBackgroundCatalog(rows) {
+  if (!Array.isArray(rows)) return [];
+  const out = [];
+  for (const row of rows) {
+    const name = String(row?.name || "").trim();
+    if (!name || name === "透明场景" || name === "透明背景") continue;
+    let scenes = [];
+    if (Array.isArray(row.scenes) && row.scenes.length) {
+      scenes = row.scenes.map((sc, idx) => ({
+        index: Number(sc.index || idx + 1),
+        label: String(sc.label || ("场景 " + (idx + 1))),
+        path: String(sc.path || ""),
+      }));
+    } else if (Array.isArray(row.sprites)) {
+      const tagLines = String(row.bg_tags || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      const labels = {};
+      tagLines.forEach((line, i) => {
+        const m = line.match(/(\d+)\s*[:：]/);
+        labels[m ? Number(m[1]) : (i + 1)] = parseTagLineLabel(line);
+      });
+      scenes = row.sprites
+        .map((sp, i) => ({
+          index: i + 1,
+          label: labels[i + 1] || ("场景 " + (i + 1)),
+          path: String(typeof sp === "string" ? sp : (sp?.path || "")).trim(),
+        }))
+        .filter((sc) => sc.path);
+    }
+    if (!scenes.length) continue;
+    const bgmCount = Number(row.bgm_count ?? (Array.isArray(row.bgms) ? row.bgms.length : (Array.isArray(row.bgm_list) ? row.bgm_list.length : 0)));
+    out.push({ name, scene_count: scenes.length, bgm_count: bgmCount, scenes });
+  }
+  return out;
+}
+
+function mergeBackgrounds(rows) {
+  const normalized = normalizeBackgroundCatalog(rows);
+  if (!normalized.length && state.backgrounds.length) return;
+  state.backgrounds = normalized;
+  const select = el("dialogue-background");
+  const prev = select.value;
+  select.replaceChildren(new Option(normalized.length ? "选择内置背景组…" : "暂无可用内置背景组", ""));
+  for (const bg of normalized) {
+    const suffix = bg.bgm_count ? (bg.scene_count + " 场景 / " + bg.bgm_count + " 配乐") : (bg.scene_count + " 场景");
+    select.add(new Option(bg.name + " · " + suffix, bg.name));
+  }
+  if (prev && normalized.some((bg) => bg.name === prev)) {
+    select.value = prev;
+  } else if (!prev && normalized.length && el("dialogue-bg-mode").value === "shinsekai") {
+    select.value = normalized[0].name;
+  }
+  renderScenePicker();
+}
+
+function renderScenePicker() {
+  const picker = el("dialogue-scene-picker");
+  const pickedLabel = el("dialogue-scene-picked");
+  if (!picker || !pickedLabel) return;
+  const group = selectedBgGroup(el("dialogue-background").value);
+  picker.replaceChildren();
+  if (!group) {
+    state.dialogueSceneIndex = 0;
+    pickedLabel.textContent = "请先选择背景组";
+    picker.innerHTML = '<span class="cast-empty" style="grid-column:1 / -1;padding:8px 4px;">选择一个 Shinsekai 背景组后即可浏览内置场景图。</span>';
+    return;
+  }
+  const scenes = group.scenes || [];
+  if (!scenes.some((sc) => sc.index === state.dialogueSceneIndex)) state.dialogueSceneIndex = 0;
+  const activeScene = scenes.find((sc) => sc.index === state.dialogueSceneIndex);
+  pickedLabel.textContent = activeScene ? ("场景 " + activeScene.index + " · " + activeScene.label) : "自动匹配";
+
+  const makeCard = ({ index, label, badge, thumbHtml }) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "scene-card" + (state.dialogueSceneIndex === index ? " active" : "");
+    card.innerHTML =
+      '<div class="scene-thumb">' + thumbHtml + '<span class="scene-idx-badge">' + esc(badge) + "</span></div>"
+      + '<div class="scene-label" title="' + esc(label) + '">' + esc(label) + "</div>";
+    card.onclick = () => {
+      state.dialogueSceneIndex = index;
+      clearDialogueDraft();
+      renderScenePicker();
+    };
+    return card;
+  };
+
+  picker.append(makeCard({
+    index: 0,
+    label: "随剧本自动挑选",
+    badge: "自动",
+    thumbHtml: '<span style="font-size:12px;color:var(--pink-soft);font-weight:600;">自动匹配</span>',
+  }));
+  for (const sc of scenes) {
+    const thumbUrl = withToken("/api/media/thumbnail?path=" + encodeURIComponent(sc.path) + "&size=240");
+    picker.append(makeCard({
+      index: sc.index,
+      label: sc.label,
+      badge: "#" + sc.index,
+      thumbHtml: '<img src="' + esc(thumbUrl) + '" alt="' + esc(sc.label) + '" loading="lazy" onerror="this.remove()" />',
+    }));
+  }
+}
+
+async function inspectTargetBackground(target) {
+  const hint = el("dialogue-bg-inject-hint");
+  if (!hint) return;
+  const mode = el("dialogue-bg-mode").value;
+  if (state.dialogueMode !== "inject" || !target || target.kind === "story") {
+    hint.classList.add("hidden");
+    return;
+  }
+  let bgName = "";
+  if (target.id) {
+    if (!(target.id in state.targetBgCache)) {
+      const payload = await hostRequest("/api/chat/conversations/" + encodeURIComponent(target.id) + "/launch-payload").catch(() => null);
+      state.targetBgCache[target.id] = String(payload?.backgroundName || "").trim();
+    }
+    bgName = state.targetBgCache[target.id] || "";
+  }
+  if (selectedChat()?.historyPath !== target.historyPath) return;
+  const pickedGroup = el("dialogue-background").value;
+  if (mode !== "shinsekai") {
+    hint.classList.add("hidden");
+    return;
+  }
+  if (bgName && (!pickedGroup || bgName === pickedGroup)) {
+    if (!pickedGroup && selectedBgGroup(bgName)) {
+      el("dialogue-background").value = bgName;
+      renderScenePicker();
+    }
+    hint.textContent = "已识别当前对话内置背景组「" + bgName + "」，剧情将直接联动其中场景。";
+    hint.classList.remove("hidden");
+  } else if (bgName && pickedGroup && bgName !== pickedGroup) {
+    hint.textContent = "当前已有对话绑定的是背景组「" + bgName + "」，若改为「" + pickedGroup + "」建议同步切换背景或新建对话。";
+    hint.classList.remove("hidden");
+  } else {
+    hint.textContent = "当前已有对话未启用背景组；若要画面随剧本切场，建议通过「新建剧本对话」开启。";
+    hint.classList.remove("hidden");
+  }
+}
+
+function syncBackgroundUi() {
+  const isShinsekai = el("dialogue-bg-mode").value === "shinsekai";
+  el("dialogue-bg-box").classList.toggle("hidden", !isShinsekai);
+  if (isShinsekai && !el("dialogue-background").value && state.backgrounds.length) {
+    const target = state.dialogueMode === "inject" ? selectedChat() : null;
+    const cachedBg = target?.id ? state.targetBgCache[target.id] : "";
+    el("dialogue-background").value = (cachedBg && selectedBgGroup(cachedBg)?.name) || state.backgrounds[0].name;
+  }
+  renderScenePicker();
+  void inspectTargetBackground(selectedChat());
+}
+
+function syncObserverUi({ preserveOpening = false } = {}) {
+  const isObserver = el("dialogue-experience-mode").value === "observer";
+  el("dialogue-observer-box").classList.toggle("hidden", !isObserver);
+  const castCount = state.dialogueMode === "new"
+    ? state.dialogueCharacters.size
+    : (selectedChat()?.characters || []).length;
+  el("dialogue-observer-cast-hint").classList.toggle("hidden", !(isObserver && castCount === 1));
+  if (isObserver && !preserveOpening) {
+    el("dialogue-observer-autoplay").checked = true;
+    if (state.dialogueMode === "new") el("dialogue-opening").checked = true;
+  }
+}
+
+function renderDialogueTarget() {
+  const target = selectedChat();
+  const isCurrent = sameHistory(target?.historyPath, state.currentChat?.historyPath);
+  const curBar = el("dialogue-current");
+  if (state.currentChat) {
+    curBar.innerHTML = '<span class="status-dot on"></span><span class="chat-name">当前对话 · '
+      + esc(state.currentChat.title || "未命名对话") + "</span>";
+  } else {
+    curBar.innerHTML = '<span class="status-dot"></span><span class="chat-name" style="color:var(--muted);">当前没有运行中的对话</span>';
+  }
+  el("dialogue-native-warning").classList.toggle("hidden", target?.kind !== "story");
+  const castNames = target?.characters || [];
+  el("dialogue-cast").innerHTML = castNames.length
+    ? castNames.map((name) => '<span class="cast-pill"><span class="cast-avatar">' + esc(name.slice(0, 1)) + "</span>" + esc(name) + "</span>").join("")
+    : '<span class="cast-empty">选择对话后将自动识别参与角色</span>';
+  el("dialogue-recent").disabled = !isCurrent || target?.kind === "story";
+  if (el("dialogue-recent").disabled) el("dialogue-recent").checked = false;
+  const binding = currentBinding();
+  const boundSession = binding ? state.sessions.find((row) => row.session_id === binding.session_id) : null;
+  const showCue = Boolean(state.dialogueMode === "inject" && isCurrent && binding && target?.kind !== "story");
+  el("dialogue-cue").classList.toggle("hidden", !showCue);
+  if (showCue) {
+    el("dialogue-cue").textContent = boundSession?.experience_mode === "observer"
+      ? (Number(boundSession.turn_count || 0) > 0 ? "观剧续演一轮" : "拉开帷幕开演")
+      : "推入开场引子";
+  }
+  if (state.dialogueMode === "inject" && !el("dialogue-submit").dataset.busy) {
+    el("dialogue-submit").textContent = !target || isCurrent
+      ? "注入到当前对话（免重启立即生效）" : "绑定所选对话";
+    el("dialogue-submit").disabled = !target || target.kind === "story";
+  }
+  syncObserverUi({ preserveOpening: true });
+  syncBackgroundUi();
+}
+
+async function loadChatTargets(initial = false) {
+  const [active, library, runtime] = await Promise.all([
+    hostRequest("/api/chat/conversations/current").catch(() => null),
+    hostRequest("/api/chat/conversations").catch(() => []),
+    hostRequest("/api/chat/runtime-status"),
+  ]);
+  const rows = Array.isArray(library) ? library : [];
+  let current = chatIsRunning(runtime) ? active : null;
+  if (chatIsRunning(runtime) && !current?.historyPath) {
+    const snapshot = await hostRequest("/api/chat/snapshot").catch(() => null);
+    if (snapshot?.historyPath) {
+      const binding = Object.values(state.chatBindings).find((row) => sameHistory(row.history_path, snapshot.historyPath));
+      const matching = rows.find((row) => sameHistory(row.historyPath, snapshot.historyPath));
+      const names = [...new Set([snapshot.characterName, ...(snapshot.sprites || []).map((row) =>
+        row.characterName || row.character || row.name)].filter((name) => typeof name === "string" && name))];
+      current = matching || {
+        historyPath: snapshot.historyPath, title: state.sessions.find((row) => row.session_id === binding?.session_id)?.title,
+        kind: snapshot.storyPath || snapshot.storySession || snapshot.story ? "story" : "normal",
+        characters: binding?.characters?.length ? binding.characters : names,
+      };
+    }
+  }
+  state.currentChat = current?.historyPath ? current : null;
+  state.conversations = state.currentChat
+    ? [state.currentChat, ...rows.filter((row) => !sameHistory(row.historyPath, state.currentChat.historyPath))]
+    : rows;
+  state.conversationsLoaded = true;
+  const select = el("dialogue-target");
+  const previous = select.value;
+  select.replaceChildren(new Option("选择目标对话", ""));
+  for (const row of state.conversations) {
+    const prefix = sameHistory(row.historyPath, state.currentChat?.historyPath) ? "当前 · " : "";
+    select.add(new Option(prefix + (row.title || row.characters?.join(" · ") || "未命名对话"), row.historyPath));
+  }
+  select.value = state.conversations.find((row) => sameHistory(row.historyPath, previous))?.historyPath
+    || state.currentChat?.historyPath || "";
+  if (previous && !sameHistory(previous, select.value) && state.dialogueMode === "inject") clearDialogueDraft();
+  if (initial && !state.currentChat && !state.conversations.length) switchDialogueMode("new");
+  renderDialogueTarget();
+  return runtime;
+}
+
+function switchDialogueMode(mode) {
+  if (state.dialogueMode !== mode) clearDialogueDraft();
+  state.dialogueMode = mode;
+  for (const name of ["inject", "new"]) {
+    el("dialogue-" + name + "-btn").classList.toggle("active", mode === name);
+    el("dialogue-" + name + "-panel").classList.toggle("hidden", mode !== name);
+  }
+  el("dialogue-progress").textContent = "";
+  if (mode === "new") {
+    el("dialogue-submit").textContent = "创建剧本并开启新对话";
+    el("dialogue-submit").disabled = false;
+    el("dialogue-cue").classList.add("hidden");
+    syncObserverUi({ preserveOpening: true });
+    syncBackgroundUi();
+  } else {
+    renderDialogueTarget();
+  }
+}
+
+function renderDialogueCharacters() {
+  const names = state.hostCharacterNames ?? state.characters.map((row) => row.name);
+  const key = JSON.stringify(names);
+  if (key === state.dialogueCharactersKey) return;
+  state.dialogueCharactersKey = key;
+  const box = el("dialogue-characters");
+  box.replaceChildren();
+  if (!names.length) {
+    box.innerHTML = '<span class="cast-empty">暂未检测到宿主角色</span>';
+    return;
+  }
+  for (const name of names) {
+    const chip = document.createElement("label");
+    chip.className = "char-chip";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = state.dialogueCharacters.has(name);
+    chip.classList.toggle("is-selected", input.checked);
+    const dot = document.createElement("span");
+    dot.className = "char-check";
+    const txt = document.createElement("span");
+    txt.textContent = name;
+    input.onchange = () => {
+      if (input.checked) state.dialogueCharacters.add(name);
+      else state.dialogueCharacters.delete(name);
+      chip.classList.toggle("is-selected", input.checked);
+      clearDialogueDraft();
+      syncObserverUi({ preserveOpening: true });
+    };
+    chip.append(input, dot, txt);
+    box.append(chip);
+  }
+}
+
+function dialogueSpec() {
+  const isShinsekai = el("dialogue-bg-mode").value === "shinsekai";
+  return {
+    title: el("dialogue-title").value.trim(),
+    theme_compass: el("dialogue-theme").value,
+    max_nodes: Number(el("dialogue-pacing").value),
+    outline: el("dialogue-outline").value,
+    characters: state.dialogueMode === "new" ? [...state.dialogueCharacters] : selectedChat()?.characters || [],
+    background_mode: isShinsekai ? "shinsekai" : "custom",
+    opening_background: isShinsekai ? el("dialogue-background").value : "",
+    opening_scene_index: isShinsekai ? Number(state.dialogueSceneIndex || 0) : 0,
+    allow_scene_transitions: isShinsekai ? el("dialogue-allow-scene-transitions").checked : true,
+    use_narration: state.dialogueMode === "new" && el("dialogue-narration").checked,
+    experience_mode: el("dialogue-experience-mode").value,
+    observer_autoplay: el("dialogue-experience-mode").value === "observer" && el("dialogue-observer-autoplay").checked,
+    observer_interval_sec: Number(el("dialogue-observer-interval").value || 8),
+    custom_draft: state.dialogueDraft || {},
+  };
+}
+
+async function dialogueValues({ preview = false } = {}) {
+  const values = dialogueSpec();
+  if (!values.characters.length) throw new Error("请选择出场角色或含角色的对话。");
+  if (preview || !state.dialogueDraft) delete values.custom_draft;
+  if (state.dialogueMode === "inject") {
+    const target = selectedChat();
+    if (!target || target.kind === "story") throw new Error("请选择普通对话。");
+    Object.assign(values, { history_path: target.historyPath, conversation_id: target.id, kind: target.kind });
+    if (el("dialogue-recent").checked && sameHistory(target.historyPath, state.currentChat?.historyPath)) {
+      const history = await hostRequest("/api/chat/history");
+      const current = await hostRequest("/api/chat/snapshot");
+      if (!sameHistory(target.historyPath, current.historyPath)) throw new Error("当前对话已切换，请重新选择。");
+      values.recent_chat_turns = (Array.isArray(history) ? history : history?.historyEntries || [])
+        .filter((row) => ["user", "assistant"].includes(row.role)).slice(-10)
+        .map((row) => ({ role: row.role, text: String(row.text || "").slice(0, 320) }));
+    }
+  }
+  return values;
+}
+
+function renderDialogueDraft() {
+  const draft = state.dialogueDraft;
+  const box = el("dialogue-draft");
+  box.classList.toggle("hidden", !draft);
+  box.replaceChildren();
+  if (!draft) return;
+
+  const head = document.createElement("div");
+  head.className = "draft-head";
+  const headLeft = document.createElement("div");
+  headLeft.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;";
+  const headTitle = document.createElement("span");
+  headTitle.textContent = "开局草案 · 可直接编辑";
+  headLeft.append(headTitle);
+  if (draft.background_group) {
+    const bgTag = document.createElement("span");
+    bgTag.className = "pill sky";
+    bgTag.textContent = "Shinsekai · " + draft.background_group
+      + (draft.background_scene_index ? (" #" + draft.background_scene_index) : "");
+    headLeft.append(bgTag);
+  }
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "btn sm ghost";
+  clearBtn.textContent = "收起";
+  clearBtn.onclick = clearDialogueDraft;
+  head.append(headLeft, clearBtn);
+  box.append(head);
+
+  function field(parent, row, key, label, height = 1) {
+    const wrap = document.createElement("label");
+    wrap.className = "field";
+    const caption = document.createElement("span");
+    caption.className = "draft-field-label";
+    caption.textContent = label;
+    const input = document.createElement(height === 1 ? "input" : "textarea");
+    if (height === 1) input.type = "text";
+    else input.rows = height;
+    input.value = row[key] || "";
+    input.oninput = () => { row[key] = input.value; };
+    wrap.append(caption, input);
+    parent.append(wrap);
+  }
+
+  field(box, draft, "premise", "开局梗概", 2);
+  field(box, draft, "public_incident_fact", "在场角色都知道的事", 2);
+  const sceneGrid = document.createElement("div");
+  sceneGrid.className = "row2";
+  sceneGrid.style.marginBottom = "9px";
+  const draftGroup = draft.background_group ? selectedBgGroup(draft.background_group) : null;
+  if (draftGroup) {
+    const wrap = document.createElement("label");
+    wrap.className = "field";
+    const caption = document.createElement("span");
+    caption.className = "draft-field-label";
+    caption.textContent = "Shinsekai 开场场景";
+    const sel = document.createElement("select");
+    for (const sc of draftGroup.scenes || []) {
+      sel.add(new Option("场景 " + sc.index + " · " + sc.label, String(sc.index)));
+    }
+    sel.value = String(draft.background_scene_index || draftGroup.scenes[0]?.index || 1);
+    sel.onchange = () => {
+      const picked = (draftGroup.scenes || []).find((sc) => sc.index === Number(sel.value));
+      if (!picked) return;
+      draft.background_scene_index = picked.index;
+      draft.background_scene_path = picked.path;
+      draft.scene_name = picked.label;
+    };
+    wrap.append(caption, sel);
+    sceneGrid.append(wrap);
+  } else {
+    field(sceneGrid, draft, "scene_name", "场景名称");
+  }
+  field(sceneGrid, draft, "atmosphere", "场景氛围");
+  box.append(sceneGrid);
+
+  draft.node1 ||= {};
+  field(box, draft.node1, "situation", "开场处境", 2);
+  field(box, draft.node1, "dilemma_frame", "开场两难", 2);
+
+  draft.character_roles ||= {};
+  for (const name of dialogueSpec().characters) {
+    if (!Object.hasOwn(draft.character_roles, name)) {
+      Object.defineProperty(draft.character_roles, name, { value: {}, enumerable: true });
+    }
+    const row = draft.character_roles[name];
+    const group = document.createElement("div");
+    group.className = "dialogue-role";
+    const heading = document.createElement("div");
+    heading.className = "dialogue-role-head";
+    const badge = document.createElement("span");
+    badge.className = "role-badge";
+    badge.textContent = name.slice(0, 1);
+    const title = document.createElement("span");
+    title.textContent = name;
+    heading.append(badge, title);
+    group.append(heading);
+    field(group, row, "local_role", "剧中身份");
+    field(group, row, "relationship_to_incident", "只有该角色知道的秘密或牵挂", 2);
+    box.append(group);
+  }
+}
+
+function setDialoguePresets(rows, selected) {
+  if (!Array.isArray(rows)) return;
+  state.dialoguePresets = rows;
+  const select = el("dialogue-preset");
+  const target = selected || select.value;
+  select.replaceChildren(new Option("选择剧本预设…", ""));
+  for (const row of rows) select.add(new Option(row.title, row.preset_id));
+  select.value = rows.some((row) => row.preset_id === target) ? target : "";
+}
+
+function selectedPreset() {
+  const preset = state.dialoguePresets.find((row) => row.preset_id === el("dialogue-preset").value);
+  if (!preset) throw new Error("请先选择预设。");
+  return preset;
+}
+
+function loadDialoguePreset(preset) {
+  el("dialogue-title").value = preset.title || "";
+  el("dialogue-theme").value = preset.theme_compass || "auto";
+  el("dialogue-pacing").value = String(preset.max_nodes || 0);
+  el("dialogue-outline").value = preset.outline || "";
+  const isShinsekai = preset.background_mode === "shinsekai" || Boolean(preset.opening_background);
+  el("dialogue-bg-mode").value = isShinsekai ? "shinsekai" : "custom";
+  el("dialogue-background").value = preset.opening_background || "";
+  state.dialogueSceneIndex = Number(preset.opening_scene_index || 0);
+  el("dialogue-allow-scene-transitions").checked = preset.allow_scene_transitions !== false;
+  el("dialogue-narration").checked = Boolean(preset.use_narration);
+  el("dialogue-experience-mode").value = preset.experience_mode === "observer" ? "observer" : "co_play";
+  el("dialogue-observer-autoplay").checked = preset.experience_mode === "observer" && preset.observer_autoplay !== false;
+  if (preset.observer_interval_sec) {
+    const val = String(Math.round(Number(preset.observer_interval_sec)));
+    if ([...el("dialogue-observer-interval").options].some((o) => o.value === val)) {
+      el("dialogue-observer-interval").value = val;
+    }
+  }
+  const available = state.hostCharacterNames ?? state.characters.map((row) => row.name);
+  state.dialogueCharacters = new Set((preset.characters || []).filter((name) => available.includes(name)));
+  state.dialogueCharactersKey = "";
+  renderDialogueCharacters();
+  state.dialogueDraft = Object.keys(preset.custom_draft || {}).length
+    ? JSON.parse(JSON.stringify(preset.custom_draft)) : null;
+  renderDialogueDraft();
+  syncObserverUi({ preserveOpening: true });
+  syncBackgroundUi();
+}
+
+function downloadDialogueJSON(title, data) {
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = String(title || "对话剧本").replace(/[<>:"/\\|?*]/g, "_") + ".json";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function dialogueBusy(button, work) {
+  return async () => {
+    if (button.dataset.busy) return;
+    button.dataset.busy = "true";
+    button.disabled = true;
+    try { await work(); }
+    catch (error) { toast(error.message, true); }
+    finally {
+      button.disabled = false;
+      delete button.dataset.busy;
+      if (button.id === "dialogue-submit" && state.dialogueMode === "inject") renderDialogueTarget();
+    }
+  };
+}
+
+async function waitForChatTask(task) {
+  const id = task.id || task.taskId;
+  if (!id) throw new Error("Shinsekai 没有返回启动任务编号。");
+  const deadline = Date.now() + 240000;
+  while (Date.now() < deadline) {
+    const current = await hostRequest("/api/tasks/" + encodeURIComponent(id));
+    el("dialogue-progress").textContent = current.message || "正在启动对话…";
+    if (current.status === "succeeded") {
+      if (current.result?.status === "error") throw new Error(current.result.statusMessage || "聊天启动失败。");
+      return current.result;
+    }
+    if (["failed", "cancelled"].includes(current.status)) throw new Error(current.error || current.message || "聊天启动失败。");
+    await new Promise((resolve) => setTimeout(resolve, 650));
+  }
+  throw new Error("等待对话启动超时。");
+}
+
+async function sendDialogueCue(sessionId, expectedPath) {
+  const running = await hostRequest("/api/chat/runtime-status");
+  const current = await hostRequest("/api/chat/snapshot");
+  if (!chatIsRunning(running) || !sameHistory(current.historyPath, expectedPath)) {
+    throw new Error("请先打开此剧本绑定的对话。");
+  }
+  await runAction("trigger_dialogue_opening", { session_id: sessionId, history_path: current.historyPath });
+  toast("已推入开场引子。");
+}
+
+async function stepDialogueObserver(sessionId, expectedPath) {
+  const running = await hostRequest("/api/chat/runtime-status");
+  const current = await hostRequest("/api/chat/snapshot");
+  if (!chatIsRunning(running) || !sameHistory(current.historyPath, expectedPath)) {
+    throw new Error("请先打开此剧本绑定的对话。");
+  }
+  const res = await runAction("step_dialogue_observer", { session_id: sessionId, history_path: current.historyPath });
+  updateFromServer(res);
+  toast("已推送观剧续演，等待角色演绎下一轮。");
+}
+
+async function toggleDialogueAutoplay(sessionId, enabled, intervalSec, expectedPath) {
+  if (!enabled) {
+    updateFromServer(await runAction("toggle_dialogue_autoplay", { session_id: sessionId, enabled: false }));
+    toast("已停止自动观剧。");
+    return;
+  }
+  const running = await hostRequest("/api/chat/runtime-status");
+  const current = await hostRequest("/api/chat/snapshot");
+  if (!chatIsRunning(running) || !sameHistory(current.historyPath, expectedPath)) {
+    throw new Error("请先打开此剧本绑定的对话。");
+  }
+  const res = await runAction("toggle_dialogue_autoplay", {
+    session_id: sessionId,
+    enabled: true,
+    observer_interval_sec: intervalSec || 8,
+    trigger_now: true,
+    history_path: current.historyPath,
+  });
+  updateFromServer(res);
+  toast("已开启自动连续观剧。");
+}
+
+async function launchDialogue(values, previousSessionId = null) {
+  const button = el("dialogue-submit");
+  button.disabled = true;
+  button.dataset.busy = "true";
+  el("dialogue-progress").textContent = "正在编织剧本…";
+  try {
+    const cast = {
+      characters: values.characters,
+      backgroundName: values.opening_background,
+      useChoice: false,
+      useStat: false,
+      useNarration: values.use_narration,
+    };
+    const template = await hostRequest("/api/templates/generate", cast);
+    const created = await runAction("create_dialogue_story", {
+      ...values,
+      history_path: "",
+      observer_autoplay: Boolean(values.observer_autoplay),
+    });
+    updateFromServer(created);
+
+    const runtime = await hostRequest("/api/chat/runtime-status");
+    if (chatIsRunning(runtime)) {
+      if (previousSessionId === null) throw new Error("当前已有对话在运行。再次启动可切换至新对话。");
+      el("dialogue-progress").textContent = "正在关闭当前对话…";
+      await hostRequest("/api/chat/close", { expectedSessionId: previousSessionId });
+    }
+
+    el("dialogue-progress").textContent = "正在启动 Shinsekai 对话…";
+    const task = await hostRequest("/api/chat/init", {
+      mode: "launch",
+      payload: {
+        ...cast,
+        characters: template.resolvedCharacters || cast.characters,
+        system: template.system,
+        scenario: template.scenario || "",
+        resetHistory: true,
+        conversationTitle: created.session.title,
+      },
+    });
+    const taskResult = await waitForChatTask(task);
+    const snapshot = await hostRequest("/api/chat/snapshot").catch(() => null);
+    const realHistoryPath = String(snapshot?.historyPath || taskResult?.historyPath || "").trim();
+    if (!realHistoryPath) {
+      throw new Error("Shinsekai 已启动对话，但未返回真实存档路径，请在卡片中手动绑定当前对话。");
+    }
+
+    const library = await hostRequest("/api/chat/conversations").catch(() => []);
+    const matchingConv = Array.isArray(library)
+      ? library.find((row) => sameHistory(row.historyPath, realHistoryPath))
+      : null;
+
+    const bound = await runAction("bind_dialogue_session", {
+      session_id: created.session.session_id,
+      history_path: realHistoryPath,
+      conversation_id: matchingConv?.id || "",
+      characters: template.resolvedCharacters || values.characters,
+    });
+    updateFromServer(bound);
+
+    if (values.experience_mode === "observer" && values.observer_autoplay) {
+      const autoRes = await runAction("toggle_dialogue_autoplay", {
+        session_id: created.session.session_id,
+        enabled: true,
+        observer_interval_sec: Number(values.observer_interval_sec || 8),
+        trigger_now: true,
+        history_path: realHistoryPath,
+      });
+      updateFromServer(autoRes);
+      toast("已创建剧本、绑定新对话并开启自动观剧。");
+    } else if (values.auto_opening) {
+      await sendDialogueCue(created.session.session_id, realHistoryPath);
+    } else {
+      toast("已创建剧本并绑定新对话。");
+    }
+
+    await loadChatTargets();
+    el("dialogue-progress").textContent =
+      "新剧本对话已启动并完成绑定！若当前不在聊天舞台内，请前往「聊天管理」顶部点击「打开聊天」进入（无需点击下方「继续聊天」）。";
+    return bound;
+  } finally {
+    button.disabled = false;
+    delete button.dataset.busy;
+  }
+}
+
+async function submitDialogue() {
+  const runtime = await loadChatTargets();
+  const values = await dialogueValues();
+  if (state.dialogueMode === "inject") {
+    const autoOpeningCue = values.experience_mode === "observer"
+      && values.observer_autoplay
+      && sameHistory(values.history_path, state.currentChat?.historyPath);
+    const response = await runAction("create_dialogue_story", { ...values, trigger_opening: autoOpeningCue });
+    updateFromServer(response);
+    if (response.opening_error) toast(response.opening_error, true);
+    if (sameHistory(values.history_path, state.currentChat?.historyPath)) {
+      el("dialogue-progress").textContent = values.experience_mode === "observer"
+        ? (values.observer_autoplay ? "已开启自动连续观剧，将持续演至篇章落幕。" : "已切入观剧模式，点击「开演 / 续演一轮」即可看角色自主对戏。")
+        : "已注入当前对话，角色会在下一次回复时自然接续剧本。";
+    } else {
+      el("dialogue-progress").textContent = "已绑定所选对话，打开后立即生效。";
+    }
+    toast("剧本绑定成功。");
+    return;
+  }
+  values.auto_opening = el("dialogue-opening").checked;
+  if (!chatIsRunning(runtime)) {
+    await launchDialogue(values);
+    return;
+  }
+  const snapshot = await hostRequest("/api/chat/snapshot");
+  if (!snapshot.sessionId && !snapshot.historyPath) throw new Error("当前对话正在切换，请稍后再试。");
+  openConfirmation("切换对话", "Shinsekai 需要先关闭当前对话，再开启新剧本对话。", () =>
+    launchDialogue(values, snapshot.sessionId || ""));
 }
 
 function renderCharacters() {
@@ -569,7 +2766,7 @@ function renderCharacters() {
   if (!state.characters.length) {
     state.charactersInitialized = true;
     state.charactersKey = "";
-    box.innerHTML = '<span style="color:var(--muted);font-size:11px;">暂未探测到宿主角色，将自动生成具备差异化性格的原生居民。</span>';
+    box.innerHTML = '<span class="cast-empty">暂未探测到宿主角色，将自动生成具备差异化性格的原生居民。</span>';
     return;
   }
   for (const ch of state.characters) {
@@ -580,10 +2777,13 @@ function renderCharacters() {
     cb.name = "imp-char";
     cb.value = ch.name;
     cb.checked = prevChecked.has(ch.name) || (allowAutoDefault && ch.name === "七海千秋");
+    lbl.classList.toggle("is-selected", cb.checked);
+    cb.onchange = () => lbl.classList.toggle("is-selected", cb.checked);
+    const dot = document.createElement("span");
+    dot.className = "char-check";
     const span = document.createElement("span");
-    span.textContent = ch.name + (ch.persona_bound ? " · 人格已绑定" : "");
-    lbl.appendChild(cb);
-    lbl.appendChild(span);
+    span.textContent = ch.name + (ch.persona_bound ? " · 已绑人格" : "");
+    lbl.append(cb, dot, span);
     box.appendChild(lbl);
   }
   state.charactersInitialized = true;
@@ -595,7 +2795,7 @@ function renderRealmsSelect() {
   if (relSrc) {
     const prevSrc = relSrc.value || "auto";
     const baseOpts = [
-      { value: "auto", label: "自动继承文字世界设定（优先默认初始关系，其次各世界已设关系）" },
+      { value: "auto", label: "自动继承文字世界设定（优先默认初始关系）" },
       { value: "__default__", label: "仅使用角色管理「默认初始关系」" },
       ...state.realms
         .filter((r) => !r.isolated_persona)
@@ -638,12 +2838,14 @@ function renderSessions() {
   pane.innerHTML = "";
   if (!state.sessions.length) {
     pane.innerHTML =
-      '<div class="preview-box">'
-      + '<div style="font-weight:600;color:var(--accent);margin-bottom:6px;">等待拨动第一根命运丝线</div>'
-      + '<div style="color:var(--muted);font-size:12px;line-height:1.6;">'
-      + "在左侧「新建故事」或「挂载小镇」开启后，故事引擎不会预先写死结局，而是在立体楼层与密闭隔间中投放契机，"
-      + "完整记录每一位角色的亲历见闻、节点自主选择，并顺着真实选择与后果滚动编排后续章节。"
-      + "</div></div>";
+      '<div class="empty-stage">'
+      + '<div class="empty-stage-icon" aria-hidden="true">'
+      + '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />'
+      + "</svg></div>"
+      + "<h3>等待拨动第一根命运丝线</h3>"
+      + "<p>在左侧编织台将对话剧本注入当前聊天、新建剧本对话，或创建并挂载一座活态故事小镇。</p>"
+      + "</div>";
     return;
   }
 
@@ -653,114 +2855,217 @@ function renderSessions() {
     card.className = "session-item";
     const threads = s.threads || [];
     const activeThread = threads.find((t) => t.status === "active");
+    const tensionPct = activeThread ? Math.max(4, Math.min(100, Math.round((activeThread.tension || 0) * 100))) : 0;
     const statusPill = activeThread
-      ? '<span class="pill warn">' + esc(phaseLabels[activeThread.phase] || activeThread.phase) + " · 张力 " + Math.round((activeThread.tension || 0) * 100) + "%</span>"
-      : '<span class="pill ok">日常稳态 · 已落笔 ' + (s.chronicle_archive?.length || 0) + " 篇</span>";
-    const modeTag = s.mode === "standalone"
-      ? (s.experience_mode === "observer" ? "独立舞台 · 观剧" : "独立故事小镇")
-      : "常驻小镇挂载";
+      ? '<div class="phase-box">'
+        + '<span class="pill warn"><span class="status-dot warn"></span>' + esc(phaseLabels[activeThread.phase] || activeThread.phase) + " · 张力 " + Math.round((activeThread.tension || 0) * 100) + "%</span>"
+        + '<div class="tension-bar" title="剧情张力"><i style="width:' + tensionPct + '%;"></i></div>'
+        + "</div>"
+      : '<div class="phase-box"><span class="pill ok"><span class="status-dot on"></span>日常稳态 · 已落笔 ' + (s.chronicle_archive?.length || 0) + " 篇</span></div>";
+
+    const isDialogue = s.mode === "dialogue";
+    const isDialogueObserver = isDialogue && s.experience_mode === "observer";
+    const binding = isDialogue ? Object.values(state.chatBindings).find((row) => row.session_id === s.session_id) : null;
+    const matchedConv = binding ? state.conversations.find((row) => sameHistory(row.historyPath, binding.history_path)) : null;
+    const isBoundCurrent = Boolean(binding && sameHistory(binding.history_path, state.currentChat?.historyPath));
+    const bindingBroken = Boolean(binding && state.conversationsLoaded && !matchedConv && !isBoundCurrent);
+    const modeTag = isDialogue
+      ? (isDialogueObserver ? "对话剧本 · 观剧" : "对话剧本 · 共演")
+      : s.mode === "standalone"
+        ? (s.experience_mode === "observer" ? "独立舞台 · 观剧" : "独立故事小镇")
+        : "常驻小镇挂载";
+    const modeCls = isDialogue ? "pink" : (s.mode === "standalone" ? "sky" : "");
 
     let html =
       '<div class="session-hd">'
-      + '<span class="session-title">🧵 ' + esc(s.title || s.realm_name || s.realm_space_id) + ' <small style="color:var(--muted);font-weight:400;">(' + esc(modeTag) + ")</small></span>"
+      + '<div class="session-title-group">'
+      + '<span class="session-title">' + esc(s.title || s.realm_name || s.realm_space_id) + "</span>"
+      + '<span class="pill ' + modeCls + '">' + esc(modeTag) + "</span>"
+      + "</div>"
       + statusPill
       + "</div>";
 
+    if (isDialogue) {
+      const bindingTitle = matchedConv?.title || (isBoundCurrent ? state.currentChat?.title : "");
+      const autoPill = isDialogueObserver
+        ? (s.observer_autoplay
+          ? '<span class="pill pink"><span class="status-dot pink"></span>持续自动观剧中 · 每 ' + Number(s.observer_interval_sec || 8) + "s</span>"
+          : '<span class="pill">手动观剧</span>')
+        : "";
+      const scCtx = s.scene_context || {};
+      const bgPill = scCtx.background_mode === "shinsekai" && scCtx.opening_background
+        ? '<span class="pill sky">内置背景 · ' + esc(scCtx.opening_background)
+          + (scCtx.background_scene_index ? (" · 场景 #" + Number(scCtx.background_scene_index)) : "") + "</span>"
+        : "";
+      const bindPillCls = bindingBroken ? "warn" : (binding ? "ok" : "");
+      const bindDotCls = bindingBroken ? "warn" : (binding ? "on" : "");
+      const bindLabel = bindingBroken
+        ? "绑定路径失效 · 请重新绑定"
+        : isBoundCurrent
+          ? ("当前运行中 · " + (bindingTitle || "已绑定对话"))
+          : binding
+            ? (bindingTitle ? "已绑定 · " + bindingTitle : "已绑定对话")
+            : "未绑定对话";
+      html += '<div class="meta-strip">'
+        + '<span class="pill ' + bindPillCls + '">'
+        + '<span class="status-dot ' + bindDotCls + '"></span>'
+        + esc(bindLabel) + "</span>"
+        + bgPill
+        + autoPill
+        + (s.paused ? '<span class="pill warn">注入已暂停</span>' : "")
+        + '<span class="pill">' + Number(s.turn_count || 0) + " 轮</span></div>";
+      if (bindingBroken) {
+        html += '<div class="dialogue-hint" style="color:var(--amber);">检测到该剧本绑定的对话存档已不存在，请点击下方「重绑对话」重新关联真实对话。</div>';
+      } else if (binding && !isBoundCurrent && !state.currentChat && state.conversationsLoaded) {
+        html += '<div class="dialogue-hint">当前无运行中对话，可在 Shinsekai「聊天管理」找到「'
+          + esc(bindingTitle || s.title || "此对话") + '」点击「继续聊天」打开。</div>';
+      }
+      if (isDialogueObserver && s.observer_status_note) {
+        html += '<div class="dialogue-hint" style="color:var(--amber);">' + esc(s.observer_status_note) + "</div>";
+      }
+      if (isDialogueObserver && isBoundCurrent && s.status === "active" && !s.paused && activeThread && s.observer_autoplay === false) {
+        const stepLabel = Number(s.turn_count || 0) > 0 ? "续演一轮" : "开演一轮";
+        html += '<div class="dialogue-hint">当前为手动观剧。点击「' + stepLabel + '」播放下一轮，或点击「自动观剧」连续播放。</div>';
+      }
+      for (const whisper of (s.director_whispers || []).filter((row) => row.expires_after_turn > s.turn_count)) {
+        html += '<div class="whisper-banner"><span class="whisper-tag">导演耳语</span>'
+          + '<span class="pill">' + esc(whisper.target || "全体") + "</span>"
+          + "<span>" + esc(whisper.text) + "</span></div>";
+      }
+    }
+
     const showThread = activeThread || threads[threads.length - 1];
     if (showThread) {
-      html += '<div style="font-size:12px;margin:4px 0 8px;"><strong style="color:var(--accent);">《' + esc(showThread.title) + "》</strong> — " + esc(showThread.premise || "") + "</div>";
+      html += '<div class="thread-premise"><strong>《' + esc(showThread.title) + "》</strong>"
+        + (showThread.premise ? " — " + esc(showThread.premise) : "") + "</div>";
+
+      html += '<div class="timeline">';
       for (const node of (showThread.nodes || [])) {
         const cls = node.status === "active" ? "active" : "done";
         const fl = node.target_floor_label ? "(" + node.target_floor_label + ")" : "";
-        const loc = (node.target_space_name || "") + fl + (node.target_zone_name ? "·" + node.target_zone_name : "");
+        const loc = isDialogue ? "" : (node.target_space_name || "") + fl + (node.target_zone_name ? " · " + node.target_zone_name : "");
         const choices = Object.values(node.participant_choices || {}).map((c) =>
-          "<li><b>" + esc(c.actor_name) + "</b> [" + esc(c.stance_label || c.stance) + "]：" + esc(c.choice_summary)
-          + (c.inner_reason ? '<div style="color:var(--accent-2);font-size:11px;">心路：' + esc(c.inner_reason) + "</div>"
-            : (c.inner_hidden ? '<div style="color:var(--muted);font-size:11px;">（内心独白已按设置收起，可切换查看或待收束揭晓）</div>' : ""))
-          + "</li>"
+          '<div class="choice-item">'
+          + '<div class="choice-head">'
+          + '<span class="choice-actor">' + esc(c.actor_name) + "</span>"
+          + '<span class="stance-tag">' + esc(c.stance_label || c.stance) + "</span>"
+          + "</div>"
+          + '<div class="choice-summary">' + esc(c.choice_summary) + "</div>"
+          + (c.inner_reason ? '<div class="thought-box">心路：' + esc(c.inner_reason) + "</div>"
+            : (c.inner_hidden ? '<div class="thought-hidden">内心独白已按设置收起，可点击「查看心路」或待篇章收束揭晓</div>' : ""))
+          + "</div>"
         ).join("");
         const pStance = node.player_stance
-          ? '<div style="font-size:11px;color:var(--accent);margin-top:3px;">你的表态 [' + esc(node.player_stance.stance_label) + "]：" + esc(node.player_stance.note) + "</div>"
+          ? '<div class="node-stance">你的表态 [' + esc(node.player_stance.stance_label) + "]：" + esc(node.player_stance.note) + "</div>"
           : "";
         const stepLabel = Number(showThread.max_nodes || 0) > 0
           ? ("第 " + (node.seq || 1) + "/" + showThread.max_nodes + " 拍")
           : ("第 " + (node.seq || 1) + " 幕");
+        const factsHtml = (isDialogue && node.revealed_facts?.length)
+          ? '<div class="fact-chips">' + node.revealed_facts.map((f) => '<span class="fact-chip">' + esc(f) + "</span>").join("") + "</div>"
+          : "";
         html +=
           '<div class="node-card ' + cls + '">'
-          + '<div style="font-size:12px;font-weight:600;color:var(--accent-2);">' + stepLabel + " · " + esc(node.title) + (loc ? "（" + esc(loc) + "）" : "") + "</div>"
-          + '<div style="font-size:12px;margin-top:3px;">' + esc(node.situation) + "</div>"
-          + (node.status === "active" ? '<div style="font-size:11px;color:var(--muted);margin-top:3px;">十字路口：' + esc(node.dilemma_frame) + "</div>" : "")
+          + '<div class="node-top">'
+          + '<span class="node-step">' + stepLabel + "</span>"
+          + (isDialogue && node.background_scene_index ? '<span class="pill sky" style="padding:1px 7px;font-size:10.5px;">场景 #' + Number(node.background_scene_index) + "</span>" : "")
+          + '<span class="node-title">' + esc(node.title) + "</span>"
+          + (loc ? '<span class="node-loc">· ' + esc(loc) + "</span>" : "")
+          + "</div>"
+          + '<div class="node-situation">' + esc(node.situation) + "</div>"
+          + (node.status === "active" && node.dilemma_frame ? '<div class="node-dilemma">十字路口：' + esc(node.dilemma_frame) + "</div>" : "")
           + pStance
-          + (choices ? '<ul style="margin:5px 0 0 16px;font-size:11px;">' + choices + "</ul>" : '<div style="font-size:11px;color:var(--muted);margin-top:3px;">等待在场角色感知节点并做出决定…</div>')
-          + (node.outcome_summary ? '<div style="font-size:11px;color:var(--ok);margin-top:4px;">↳ 因果推进：' + esc(node.outcome_summary) + "</div>" : "")
+          + factsHtml
+          + (choices ? '<div class="choice-list">' + choices + "</div>" : '<div class="dialogue-hint" style="margin-top:6px;">等待在场角色感知节点并做出决定…</div>')
+          + (node.outcome_summary ? '<div class="outcome-line">因果推进：' + esc(node.outcome_summary) + "</div>" : "")
           + "</div>";
       }
+      html += "</div>";
+
       if (showThread.chapter_chronicle) {
         const cc = showThread.chapter_chronicle;
-        html += '<div class="preview-box" style="margin-top:6px;"><b>📜 ' + esc(cc.title) + '</b><div style="font-size:11px;color:var(--muted);margin-top:3px;">' + esc(cc.epilogue) + "</div></div>";
+        const characterEnds = isDialogue ? Object.entries(cc.character_epilogues || {}).map(([key, value]) =>
+          '<div class="dialogue-hint" style="margin-top:4px;"><b style="color:var(--text);">' + esc(s.ledgers?.[key]?.name || key) + " · </b>" + esc(value) + "</div>").join("") : "";
+        html += '<div class="epilogue-card"><div class="epilogue-card-title">' + esc(cc.title) + '</div><div class="epilogue-card-body">' + esc(cc.epilogue) + "</div>"
+          + characterEnds + "</div>";
       }
     }
 
-    const ledgerCards = Object.values(s.ledgers || {}).map((lg) => {
-      const exps = (lg.experienced_events || []).slice(-2).map((ev) => esc(ev.summary)).join("；") || "暂无显著见闻";
-      const asp = (lg.arc_state?.aspirations || []).slice(-1)[0] || "";
-      const prom = (lg.arc_state?.promises || []).slice(-1)[0] || "";
-      return '<div class="ledger-card">'
-        + "<strong>" + esc(lg.name) + (lg.is_player ? "（你）" : "") + "</strong>"
-        + '<div style="color:var(--muted);margin-top:2px;">见闻：' + exps + "</div>"
-        + (asp ? '<div style="color:var(--accent);margin-top:2px;">念想：' + esc(asp) + "</div>" : "")
-        + (prom ? '<div style="color:var(--accent-2);margin-top:2px;">承诺：' + esc(prom) + "</div>" : "")
-        + "</div>";
-    }).join("");
-    if (ledgerCards) {
-      html += '<div class="ledger-grid">' + ledgerCards + "</div>";
+    const ledgerEntries = Object.values(s.ledgers || {});
+    if (ledgerEntries.length) {
+      const ledgerCards = ledgerEntries.map((lg) => {
+        const exps = (lg.experienced_events || []).slice(-2).map((ev) => esc(ev.summary)).join("；") || "暂无显著见闻";
+        const asp = (lg.arc_state?.aspirations || []).slice(-1)[0] || "";
+        const prom = (lg.arc_state?.promises || []).slice(-1)[0] || "";
+        return '<div class="ledger-card">'
+          + '<div class="ledger-name"><span class="role-badge">' + esc((lg.name || "?").slice(0, 1)) + "</span><span>" + esc(lg.name) + (lg.is_player ? "（你）" : "") + "</span></div>"
+          + '<div class="ledger-row"><b>见闻：</b>' + exps + "</div>"
+          + (asp ? '<div class="ledger-row asp"><b>念想：</b>' + esc(asp) + "</div>" : "")
+          + (prom ? '<div class="ledger-row prom"><b>承诺：</b>' + esc(prom) + "</div>" : "")
+          + "</div>";
+      }).join("");
+      html += '<details class="ledger-section" open><summary class="ledger-summary">在场角色记事 (' + ledgerEntries.length + ')</summary><div class="ledger-grid">' + ledgerCards + "</div></details>";
     }
 
     card.innerHTML = html;
     const actRow = document.createElement("div");
     actRow.className = "session-actions";
+    const mainGroup = document.createElement("div");
+    mainGroup.className = "actions-main";
+    const utilGroup = document.createElement("div");
+    utilGroup.className = "actions-util";
 
     const mkBtn = (label, cls, handler) => {
       const b = document.createElement("button");
-      b.className = "btn sm " + (cls || "");
+      b.type = "button";
+      b.className = "btn sm " + (cls || "ghost");
       b.textContent = label;
       b.onclick = () => handler(b);
       return b;
     };
 
-    const enter = document.createElement("a");
-    enter.className = "btn sm primary";
-    enter.textContent = "进入故事世界";
-    const q = new URLSearchParams({ space_id: s.realm_space_id, view: "world" });
-    if (s.mode === "standalone") q.set("mode", "story");
-    enter.href = withToken("/api/plugins/community.nanami.world/frontend/world_canvas/?" + q);
-    actRow.appendChild(enter);
+    if (!isDialogue) {
+      const enter = document.createElement("a");
+      enter.className = "btn sm primary";
+      enter.textContent = "进入故事世界";
+      const q = new URLSearchParams({ space_id: s.realm_space_id, view: "world" });
+      if (s.mode === "standalone") q.set("mode", "story");
+      enter.href = withToken("/api/plugins/community.nanami.world/frontend/world_canvas/?" + q);
+      mainGroup.appendChild(enter);
+    }
 
     if (activeThread) {
-      actRow.appendChild(mkBtn("⏩ 推进一拍", "", async (b) => {
+      mainGroup.appendChild(mkBtn("推进一拍", "accent", async (b) => {
         const orig = b.textContent;
         b.disabled = true;
-        b.textContent = "⏳ 推演中…";
+        b.textContent = "推演中…";
         try {
-          const res = await runAction("tick_fate_session", { session_id: s.session_id, force_evaluate: true, sync_models: true });
+          const values = { session_id: s.session_id, force_evaluate: true, sync_models: true };
+          const historyPath = state.currentChat?.historyPath;
+          if (isDialogueObserver && s.status === "active" && binding && sameHistory(binding.history_path, historyPath)) {
+            Object.assign(values, { trigger_observer_cue: true, history_path: historyPath });
+          }
+          const res = await runAction(isDialogue ? "advance_dialogue_beat" : "tick_fate_session", values);
           updateFromServer(res);
-          toast("已顺着角色的选择与后果编排下一拍。");
+          if (res.cue_submitted) toast("已推进对话剧情并推送续演信号。");
+          else if (res.cue_error) toast(res.cue_error, true);
+          else toast(isDialogue ? "已推进对话剧情。" : "已顺着角色的选择与后果编排下一拍。");
         } catch (e) { toast(e.message, true); } finally { b.disabled = false; b.textContent = orig; }
       }));
     } else {
-      actRow.appendChild(mkBtn("✨ 拨动新丝线", "", async (b) => {
+      mainGroup.appendChild(mkBtn("拨动新丝线", "accent", async (b) => {
         const orig = b.textContent;
         b.disabled = true;
-        b.textContent = "⏳ 编织中…";
+        b.textContent = "编织中…";
         try {
-          const res = await runAction("pluck_fate_thread", { session_id: s.session_id });
+          const res = await runAction(isDialogue ? "pluck_dialogue_thread" : "pluck_fate_thread", { session_id: s.session_id });
           updateFromServer(res);
           toast("已拨动一条新的命运丝线。");
         } catch (e) { toast(e.message, true); } finally { b.disabled = false; b.textContent = orig; }
       }));
     }
 
-    actRow.appendChild(mkBtn(s.reveal_inner_thoughts ? "🙈 隐藏心路" : "👁 查看心路", "", async (b) => {
+    mainGroup.appendChild(mkBtn(s.reveal_inner_thoughts ? "隐藏心路" : "查看心路", "ghost", async (b) => {
       b.disabled = true;
       try {
         const res = await runAction("toggle_fate_thoughts", { session_id: s.session_id });
@@ -768,17 +3073,19 @@ function renderSessions() {
       } catch (e) { toast(e.message, true); } finally { b.disabled = false; }
     }));
 
-    if (s.mode === "standalone") {
-      actRow.appendChild(mkBtn("🗑️ 删除故事舞台", "danger", () => {
-        openConfirm("删除独立故事舞台", "将彻底删除这个独立生成的故事舞台、原生居民与角色记忆（不影响主档与常驻小镇）。确认删除吗？", async () => {
+    if (isDialogue) {
+      renderDialogueSessionActions(mainGroup, utilGroup, mkBtn, s, binding, { bindingBroken });
+    } else if (s.mode === "standalone") {
+      utilGroup.appendChild(mkBtn("删除舞台", "danger", () => {
+        openConfirmation("删除独立故事舞台", "将彻底删除这个独立生成的故事舞台、原生居民与角色记忆（不影响主档与常驻小镇）。确定继续吗？", async () => {
           const res = await runAction("detach_fate_session", { session_id: s.session_id, delete_world: true });
           updateFromServer(res);
           toast("已删除独立故事舞台。");
         });
       }));
     } else {
-      actRow.appendChild(mkBtn("解绑（保留小镇）", "danger", () => {
-        openConfirm("解绑命运丝线", "确定解绑该常驻小镇的命运丝线吗？（小镇建筑、居民与物品会完整保留）", async () => {
+      utilGroup.appendChild(mkBtn("解绑（保留小镇）", "danger", () => {
+        openConfirmation("解绑命运丝线", "确定解绑该常驻小镇的命运丝线吗？（小镇建筑、居民与物品会完整保留）", async () => {
           const res = await runAction("detach_fate_session", { session_id: s.session_id, delete_world: false });
           updateFromServer(res);
           toast("已解绑命运丝线，小镇完整保留。");
@@ -786,9 +3093,204 @@ function renderSessions() {
       }));
     }
 
+    actRow.append(mainGroup, utilGroup);
     card.appendChild(actRow);
     pane.appendChild(card);
   }
+}
+
+function openRebindModal(session) {
+  const normalConvs = (state.conversations || []).filter((row) => row.historyPath && row.kind !== "story");
+  showModal(
+    "重新绑定 Shinsekai 对话",
+    '<div class="field"><label for="modal-rebind-select">选择目标普通对话</label>'
+      + '<select id="modal-rebind-select"></select></div>'
+      + '<div class="dialogue-hint">关联后，通过「聊天管理 -> 继续聊天」打开该对话时将自动装载此剧本。</div>',
+    [
+      { label: "取消", cls: "ghost", onClick: closeModal },
+      {
+        label: "确认绑定",
+        cls: "primary",
+        onClick: (button) => dialogueBusy(button, async () => {
+          const pickedPath = el("modal-rebind-select").value;
+          const picked = normalConvs.find((row) => row.historyPath === pickedPath);
+          if (!picked) throw new Error("请先选择一个普通对话。");
+          const res = await runAction("bind_dialogue_session", {
+            session_id: session.session_id,
+            history_path: picked.historyPath,
+            conversation_id: picked.id || "",
+            characters: picked.characters?.length ? picked.characters : (session.dialogue_cast || []),
+            kind: picked.kind || "normal",
+          });
+          closeModal();
+          updateFromServer(res);
+          toast("已重新绑定对话：" + (picked.title || "未命名对话"));
+        })(),
+      },
+    ],
+  );
+  const sel = el("modal-rebind-select");
+  if (!normalConvs.length) {
+    sel.add(new Option("暂无可用的普通对话（请先在聊天管理中新建）", ""));
+    return;
+  }
+  for (const row of normalConvs) {
+    const prefix = sameHistory(row.historyPath, state.currentChat?.historyPath) ? "当前 · " : "";
+    const chars = row.characters?.length ? (" (" + row.characters.join("·") + ")") : "";
+    sel.add(new Option(prefix + (row.title || "未命名对话") + chars, row.historyPath));
+  }
+  if (state.currentChat && normalConvs.some((row) => sameHistory(row.historyPath, state.currentChat.historyPath))) {
+    sel.value = normalConvs.find((row) => sameHistory(row.historyPath, state.currentChat.historyPath)).historyPath;
+  }
+}
+
+function renderDialogueSessionActions(mainGroup, utilGroup, mkBtn, session, binding, { bindingBroken = false } = {}) {
+  const session_id = session.session_id;
+  const isObserver = session.experience_mode === "observer";
+  const addTo = (group, label, cls, action, values = {}, success = "") => group.appendChild(mkBtn(label, cls, (button) =>
+    dialogueBusy(button, async () => {
+      updateFromServer(await runAction(action, { session_id, ...values }));
+      if (success) toast(success);
+    })()
+  ));
+
+  if (bindingBroken) {
+    mainGroup.appendChild(mkBtn("重绑对话", "primary", (button) => dialogueBusy(button, async () => {
+      await loadChatTargets();
+      openRebindModal(session);
+    })()));
+  }
+
+  if (isObserver && binding && !bindingBroken) {
+    mainGroup.prepend(
+      mkBtn(
+        Number(session.turn_count || 0) > 0 ? "续演一轮" : "开演一轮",
+        "primary",
+        (button) => dialogueBusy(button, () => stepDialogueObserver(session_id, binding.history_path))(),
+      ),
+      mkBtn(
+        session.observer_autoplay ? "停止自动观剧" : "自动观剧",
+        session.observer_autoplay ? "warn" : "accent",
+        (button) => dialogueBusy(button, () => toggleDialogueAutoplay(
+          session_id, !session.observer_autoplay, Number(session.observer_interval_sec || 8), binding.history_path,
+        ))(),
+      ),
+    );
+  }
+
+  mainGroup.appendChild(mkBtn("导演耳语", "accent", () => {
+    showModal("导演耳语",
+      '<div class="field"><label for="whisper-text">想让角色此刻浮现的念头</label><textarea id="whisper-text" rows="3" maxlength="240" placeholder="例如：窗外的雨声忽然让他想起了三年前未寄出的信…"></textarea></div>'
+      + '<div class="row2">'
+      + '<div class="field"><label for="whisper-target">对象</label><select id="whisper-target"></select></div>'
+      + '<div class="field"><label for="whisper-duration">持续轮数</label><input id="whisper-duration" type="number" min="1" max="24" value="2" /></div>'
+      + "</div>",
+      [{ label: "取消", cls: "ghost", onClick: closeModal }, { label: "送入耳语", cls: "primary", onClick: (button) =>
+        dialogueBusy(button, async () => {
+          const result = await runAction("inject_director_whisper", {
+            session_id, text: el("whisper-text").value, target: el("whisper-target").value,
+            duration_turns: Number(el("whisper-duration").value),
+          });
+          closeModal();
+          updateFromServer(result);
+        })() }],
+    );
+    el("whisper-target").add(new Option("全体", ""));
+    for (const name of session.dialogue_cast || []) el("whisper-target").add(new Option(name, name));
+  }));
+
+  addTo(mainGroup, session.paused ? "恢复注入" : "暂停注入", "ghost", "toggle_dialogue_pause", { paused: !session.paused });
+
+  addTo(
+    utilGroup,
+    isObserver ? "切为共演" : "切为观剧",
+    "ghost",
+    "set_dialogue_experience_mode",
+    { experience_mode: isObserver ? "co_play" : "observer" },
+    isObserver ? "已切换为共同参与模式。" : "已切换为纯观剧模式。",
+  );
+  utilGroup.appendChild(mkBtn("场景背景", "ghost", () => {
+    const scCtx = session.scene_context || {};
+    const curMode = scCtx.background_mode === "shinsekai" ? "shinsekai" : "custom";
+    const curGroup = scCtx.opening_background || state.backgrounds[0]?.name || "";
+    const curIdx = Number(scCtx.background_scene_index || scCtx.opening_scene_index || 0);
+    const curShift = scCtx.allow_scene_transitions !== false;
+    showModal("对话场景背景",
+      '<div class="field"><label for="modal-bg-mode">背景来源</label>'
+      + '<select id="modal-bg-mode"><option value="custom">自由设定场景</option><option value="shinsekai">Shinsekai 自带背景</option></select></div>'
+      + '<div id="modal-bg-details">'
+      + '<div class="field"><label for="modal-bg-group">内置背景组</label><select id="modal-bg-group"></select></div>'
+      + '<div class="field"><label for="modal-bg-scene">当前 / 开场场景</label><select id="modal-bg-scene"></select></div>'
+      + '<label class="toggle-row"><span class="toggle-label">允许随剧情推进切换同组内置场景</span>'
+      + '<span class="toggle-switch"><input type="checkbox" id="modal-bg-shift" /><span class="toggle-track"></span></span></label>'
+      + "</div>",
+      [{ label: "取消", cls: "ghost", onClick: closeModal }, { label: "应用背景", cls: "primary", onClick: (button) =>
+        dialogueBusy(button, async () => {
+          const modeVal = el("modal-bg-mode").value;
+          const res = await runAction("set_dialogue_background", {
+            session_id,
+            background_mode: modeVal,
+            opening_background: modeVal === "shinsekai" ? el("modal-bg-group").value : "",
+            opening_scene_index: modeVal === "shinsekai" ? Number(el("modal-bg-scene").value || 0) : 0,
+            allow_scene_transitions: modeVal === "shinsekai" ? el("modal-bg-shift").checked : true,
+          });
+          closeModal();
+          updateFromServer(res);
+          toast("已更新对话剧本背景设置。");
+        })() }],
+    );
+    const modeSel = el("modal-bg-mode");
+    const groupSel = el("modal-bg-group");
+    const sceneSel = el("modal-bg-scene");
+    const shiftInput = el("modal-bg-shift");
+    modeSel.value = curMode;
+    shiftInput.checked = curShift;
+    groupSel.replaceChildren(new Option(state.backgrounds.length ? "选择内置背景组…" : "暂无可用内置背景组", ""));
+    for (const bg of state.backgrounds) groupSel.add(new Option(bg.name + " · " + bg.scene_count + " 场景", bg.name));
+    if (curGroup && state.backgrounds.some((bg) => bg.name === curGroup)) groupSel.value = curGroup;
+
+    const fillModalScenes = (selectedIdx) => {
+      sceneSel.replaceChildren(new Option("自动匹配", "0"));
+      const grp = selectedBgGroup(groupSel.value);
+      for (const sc of grp?.scenes || []) {
+        sceneSel.add(new Option("场景 " + sc.index + " · " + sc.label, String(sc.index)));
+      }
+      const target = String(selectedIdx || 0);
+      sceneSel.value = [...sceneSel.options].some((o) => o.value === target) ? target : "0";
+    };
+    const syncModal = () => {
+      el("modal-bg-details").classList.toggle("hidden", modeSel.value !== "shinsekai");
+    };
+    fillModalScenes(curIdx);
+    syncModal();
+    modeSel.onchange = syncModal;
+    groupSel.onchange = () => fillModalScenes(0);
+  }));
+  addTo(utilGroup, "存为预设", "ghost", "save_dialogue_preset", {}, "已保存为剧本预设。");
+  utilGroup.appendChild(mkBtn("导出 JSON", "ghost", () =>
+    downloadDialogueJSON(session.title, JSON.stringify(session.dialogue_preset, null, 2))));
+
+  if (binding) {
+    addTo(utilGroup, "解除绑定", "ghost", "unbind_dialogue_session");
+    if (!bindingBroken) {
+      utilGroup.appendChild(mkBtn("重绑对话", "ghost", (button) => dialogueBusy(button, async () => {
+        await loadChatTargets();
+        openRebindModal(session);
+      })()));
+    }
+  } else {
+    utilGroup.appendChild(mkBtn("选择对话绑定", "ghost", (button) => dialogueBusy(button, async () => {
+      await loadChatTargets();
+      openRebindModal(session);
+    })()));
+  }
+
+  utilGroup.appendChild(mkBtn("删除剧本", "danger", () => openConfirmation(
+    "删除对话剧本", "将删除此剧本、记事与绑定。", async () => {
+      updateFromServer(await runAction("detach_fate_session", { session_id }));
+      toast("已删除剧本。");
+    },
+  )));
 }
 
 function updateFromServer(res) {
@@ -798,30 +3300,49 @@ function updateFromServer(res) {
     state.realms = res.realms;
     renderRealmsSelect();
   }
+  if (res.chat_bindings) state.chatBindings = res.chat_bindings;
+  setDialoguePresets(res.dialogue_presets, res.preset?.preset_id);
   sessionsRevision++;
+  renderDialogueTarget();
   renderSessions();
 }
 
 async function loadLobbyState() {
   try {
     const rev = sessionsRevision;
+    const mouthRev = state.dialogueMouthRevision;
     const res = await runAction("get_lobby_state", {});
     const pill = el("world-status-pill");
     if (res.world_available) {
-      pill.textContent = "文字世界已连接";
+      pill.innerHTML = '<span class="status-dot on"></span>文字世界已连接';
       pill.className = "pill ok";
     } else {
-      pill.textContent = "文字世界未就绪";
-      pill.className = "pill err";
+      pill.className = "pill hidden";
     }
+    const dialoguePill = el("dialogue-status-pill");
+    const enabled = res.settings?.enabled !== false;
+    dialoguePill.innerHTML = '<span class="status-dot ' + (enabled ? "on" : "warn") + '"></span>'
+      + (enabled ? "对话剧本就绪" : "对话剧本已停用");
+    dialoguePill.className = enabled ? "pill ok" : "pill warn";
+    const mouthToggle = el("dialogue-mouth-decoupling");
+    if (mouthRev === state.dialogueMouthRevision && !mouthToggle.hasAttribute("aria-busy")) {
+      mouthToggle.checked = res.settings?.dialogue_mouth_decoupling !== false;
+      mouthToggle.disabled = false;
+    }
+
     state.characters = res.characters || [];
+    if (Array.isArray(res.backgrounds)) mergeBackgrounds(res.backgrounds);
     renderCharacters();
+    renderDialogueCharacters();
     if (Array.isArray(res.realms)) {
       state.realms = res.realms;
       renderRealmsSelect();
     }
     if (rev === sessionsRevision) {
       state.sessions = res.sessions || res.fate_sessions || [];
+      state.chatBindings = res.chat_bindings || {};
+      setDialoguePresets(res.dialogue_presets);
+      renderDialogueTarget();
       renderSessions();
     }
   } catch (e) {
@@ -829,11 +3350,30 @@ async function loadLobbyState() {
   }
 }
 
+async function saveDialogueMouthSetting(event) {
+  const toggle = event.currentTarget;
+  const enabled = toggle.checked;
+  state.dialogueMouthRevision++;
+  toggle.disabled = true;
+  toggle.setAttribute("aria-busy", "true");
+  try {
+    const res = await runAction("set_dialogue_mouth", { dialogue_mouth_decoupling: enabled });
+    toggle.checked = res.settings.dialogue_mouth_decoupling;
+  } catch (error) {
+    toggle.checked = !enabled;
+    toast(error.message, true);
+  } finally {
+    state.dialogueMouthRevision++;
+    toggle.removeAttribute("aria-busy");
+    toggle.disabled = false;
+  }
+}
+
 async function createFateStory() {
   const btn = el("btn-create-fate");
   const orig = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "⏳ 正在生成多层舞台与第一道命运丝线…";
+  btn.textContent = "正在生成多层舞台与第一道命运丝线…";
   const checkedChars = Array.from(document.querySelectorAll('input[name="imp-char"]:checked')).map((i) => i.value);
   try {
     const res = await runAction("create_fate_story", {
@@ -867,7 +3407,7 @@ async function attachFateWorld() {
   const btn = el("btn-attach-fate");
   const orig = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "⏳ 正在挂载并拨动命运丝线…";
+  btn.textContent = "正在挂载并拨动命运丝线…";
   try {
     const res = await runAction("attach_fate_world", {
       realm_space_id: realmId,
@@ -891,16 +3431,110 @@ function init() {
     charMgrLink.href = withToken("/api/plugins/community.nanami.world/frontend/world_canvas/?view=characters");
   }
   el("modal-close-x").onclick = closeModal;
-  el("btn-refresh").onclick = loadLobbyState;
+  el("modal-mask").onclick = (event) => {
+    if (event.target === el("modal-mask")) closeModal();
+  };
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !el("modal-mask").classList.contains("hidden")) closeModal();
+  });
+
+  el("btn-refresh").onclick = async () => {
+    await loadLobbyState();
+    try { await loadChatTargets(); renderSessions(); }
+    catch (error) { toast(error.message, true); }
+  };
   el("mode-new-btn").onclick = () => switchLeftMode("new");
   el("mode-attach-btn").onclick = () => switchLeftMode("attach");
+  el("mode-dialogue-btn").onclick = () => switchLeftMode("dialogue");
   el("cfg-world-mode").onchange = () => {
     el("cfg-bldg-wrap").classList.toggle("hidden", !["town", "compound"].includes(el("cfg-world-mode").value));
   };
   el("btn-create-fate").onclick = createFateStory;
   el("btn-attach-fate").onclick = attachFateWorld;
 
-  void loadLobbyState();
+  el("dialogue-inject-btn").onclick = () => switchDialogueMode("inject");
+  el("dialogue-new-btn").onclick = () => switchDialogueMode("new");
+  el("dialogue-target").onchange = () => {
+    clearDialogueDraft();
+    renderDialogueTarget();
+  };
+  for (const id of ["dialogue-title", "dialogue-theme", "dialogue-outline", "dialogue-recent"]) {
+    el(id).oninput = clearDialogueDraft;
+  }
+  el("dialogue-experience-mode").onchange = () => {
+    clearDialogueDraft();
+    syncObserverUi();
+  };
+  el("dialogue-mouth-decoupling").onchange = saveDialogueMouthSetting;
+  el("dialogue-bg-mode").onchange = () => {
+    clearDialogueDraft();
+    syncBackgroundUi();
+  };
+  el("dialogue-background").onchange = () => {
+    state.dialogueSceneIndex = 0;
+    clearDialogueDraft();
+    syncBackgroundUi();
+  };
+  el("dialogue-allow-scene-transitions").onchange = clearDialogueDraft;
+  for (let count = 1; count <= 20; count++) el("dialogue-pacing").add(new Option(count + " 拍", count));
+  const action = (id, fn) => { el(id).onclick = dialogueBusy(el(id), fn); };
+  action("dialogue-preview", async () => {
+    const values = await dialogueValues({ preview: true });
+    const result = await runAction("preview_dialogue_story", values);
+    state.dialogueDraft = result.draft;
+    renderDialogueDraft();
+  });
+  action("dialogue-submit", submitDialogue);
+  action("dialogue-cue", async () => {
+    const binding = currentBinding();
+    if (!binding) return;
+    const boundSession = state.sessions.find((row) => row.session_id === binding.session_id);
+    if (boundSession?.experience_mode === "observer") {
+      await stepDialogueObserver(binding.session_id, binding.history_path);
+    } else {
+      await sendDialogueCue(binding.session_id, binding.history_path);
+    }
+  });
+  action("dialogue-preset-load", () => loadDialoguePreset(selectedPreset()));
+  action("dialogue-preset-save", async () => {
+    updateFromServer(await runAction("save_dialogue_preset", { preset: dialogueSpec() }));
+    toast("已保存为剧本预设。");
+  });
+  action("dialogue-preset-export", async () => {
+    const preset = selectedPreset();
+    const result = await runAction("export_dialogue_preset", { preset_id: preset.preset_id });
+    downloadDialogueJSON(preset.title, result.json);
+  });
+  action("dialogue-preset-delete", () => {
+    const preset = selectedPreset();
+    openConfirmation("删除预设", "删除预设《" + preset.title + "》？", async () => {
+      updateFromServer(await runAction("delete_dialogue_preset", { preset_id: preset.preset_id }));
+    });
+  });
+  el("dialogue-preset-import").onclick = () => el("dialogue-preset-file").click();
+  el("dialogue-preset-file").onchange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    void dialogueBusy(el("dialogue-preset-import"), async () => {
+      if (file.size > 256000) throw new Error("剧本预设文件太大。");
+      const result = await runAction("import_dialogue_preset", { json: await file.text() });
+      updateFromServer(result);
+      loadDialoguePreset(result.preset);
+      toast("已导入剧本预设。");
+    })();
+  };
+  void hostRequest("/api/backgrounds").then((rows) => {
+    if (!state.backgrounds.length) mergeBackgrounds(rows);
+  }).catch(() => {});
+  void hostRequest("/api/characters?view=names").then((rows) => {
+    if (!Array.isArray(rows)) return;
+    state.hostCharacterNames = rows.filter((name) => typeof name === "string" && name);
+    renderDialogueCharacters();
+  }).catch(() => {});
+  void loadLobbyState().then(() => loadChatTargets(true)).then(renderSessions).catch((error) => {
+    toast(error.message, true);
+  });
   state.pollTimer = setInterval(() => {
     if (!document.hidden) void loadLobbyState().catch(() => {});
   }, 5000);
